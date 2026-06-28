@@ -30,13 +30,14 @@ export default async function handler(req, res) {
     costTracker.reset();
     const expansion = body.expansion;
 
-    const queries = buildQueries(expansion, input).slice(0, 4);
-    let items = await gather(queries, { perQuery: 5, sinceDays: 365 });
+    const queries = buildQueries(expansion, input).slice(0, 3);
+    let items = await gather(queries, { perQuery: 4, sinceDays: 365 });
 
     items = filterByExcluded(items, expansion.excludedTerms);
     items = filterNoise(items);
+    items = items.slice(0, 25);
 
-    const report = await analyzeCorpus(input, items, { maxPains: 3, maxTokens: 2000 });
+    const report = await analyzeCorpus(input, items, { maxPains: 3, maxTokens: 1500 });
     if (report.error) {
       res.status(200).json(report);
       return;
