@@ -1,5 +1,6 @@
 // Vercel Serverless Function — POST /api/analyze
 // 流程: 扩词(模型) → 抓真实数据(HN + 可选 Reddit) → 过滤噪音 → 基于证据做痛点分析(模型)。
+// 支持传入自定义 expansion 跳过扩词步骤（用于用户编辑扩词后重新检索）。
 
 import { expandQuery, buildQueries, analyzeCorpus, filterByExcluded, filterNoise } from "../lib/analyze.js";
 import { gather } from "../lib/sources.js";
@@ -20,13 +21,16 @@ export default async function handler(req, res) {
       return;
     }
     if (!process.env.LLM_API_KEY) {
-      res.status(500).json({ error: "服务器未配置 LLM_API_KEY 环境变量" });
+      res.status(500).json({ error: "服务器未配置 LLM_API_KEY 环境变量。请在 Vercel 项目 Settings → Environment Variables 中添加 LLM_API_KEY（DeepSeek API Key）。" });
       return;
     }
 
     costTracker.reset();
 
-    const expansion = await expandQuery(input);
+    const expansion = body.expansion && body.expansion.englishSearchQuery
+      ? body.expansion
+      : await expandQuery(input);
+
     const queries = buildQueries(expansion, input);
     let items = await gather(queries, { perQuery: 7, sinceDays: 540 });
 
