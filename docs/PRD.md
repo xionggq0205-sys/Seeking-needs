@@ -410,7 +410,7 @@ Google Trends、SimilarWeb、Ubersuggest、Reddit、Product Hunt、G2、Capterra
 | FR-1.1 | 中/英文方向输入 | ✅ 已实现 | |
 | FR-1.2 | 扩词（固定 schema） | ✅ 已实现 | 含 derivativeTerms / sourceHints / excludedTerms |
 | FR-1.3 | 生成搜索查询集 | ✅ 已实现 | buildQueries() 合并所有扩词字段，上限 8 条 |
-| FR-1.4 | 扩词结果可编辑 | ❌ 未实现 | 当前扩词结果仅展示，不可编辑后重新检索 |
+| FR-1.4 | 扩词结果可编辑 | ✅ 已实现 | EditableChips 组件，支持增删标签后重新扫描 |
 | FR-2.1 | 可插拔数据源 | ✅ 已实现 | lib/sources.js，每个源独立导出 |
 | FR-2.2 | HN + Reddit 接入 | ✅ 已实现 | Google Trends 未接入 |
 | FR-2.5 | 采集结果带元数据 | ✅ 已实现 | source / url / points / comments / createdAt |
@@ -420,9 +420,9 @@ Google Trends、SimilarWeb、Ubersuggest、Reddit、Product Hunt、G2、Capterra
 | FR-4.1-4.4 | 信号分类+打分+真痛点 | ✅ 已实现 | 四分类 + 三档强度 + ≥3次/≥2平台规则 |
 | FR-5.1-5.2 | 证据链可追溯 | ✅ 已实现 | 每条痛点附带原帖链接 |
 | FR-6.1-6.3 | 验证模式 | ✅ 已实现 | POST /api/analyze，含弱需求如实输出 |
-| FR-10.1 | Markdown 报告导出 | ❌ 未实现 | 当前仅 JSON，无 Markdown 导出按钮 |
+| FR-10.1 | Markdown 报告导出 | ✅ 已实现 | generateMarkdown() + downloadMarkdown()，报告页"导出 Markdown"按钮 |
 | FR-11.1 | 前端 UI | ✅ 已实现 | 验证 + 发现两个标签页 |
-| FR-11.3 | 历史报告检索/对比 | ❌ 未实现 | |
+| FR-11.3 | 历史报告检索/对比 | ✅ 已实现 | 发现页 snapshot 下拉选择，可浏览历史快照 |
 
 ### V2 功能完成情况
 
@@ -451,9 +451,11 @@ Google Trends、SimilarWeb、Ubersuggest、Reddit、Product Hunt、G2、Capterra
 
 ### 待开发项（按优先级）
 
-1. **FR-1.4 扩词结果可编辑**：前端允许用户修改扩词结果后重新检索
-2. **FR-10.1 Markdown 导出**：报告页添加"导出 Markdown"按钮
-3. **FR-11.3 历史报告浏览**：发现页支持浏览历史快照、对比不同周
-4. **Google Trends 接入**：补充关键词趋势数据源
-5. **Vercel 超时优化**：当前 maxDuration=60s，PRD 目标 3-5 分钟；大方向需考虑流式响应或拆分请求
-6. **V3 BRD 深度分析**：竞品拆解、用户画像、TAM-SAM-SOM、定价、GO/NO-GO 完整输出
+1. **Google Trends 接入**（FR-8.3）：补充关键词趋势数据源
+2. **V3 BRD 深度分析**（FR-9）：竞品拆解、用户画像、TAM-SAM-SOM、定价、GO/NO-GO 完整输出
+3. **验证模式历史记录**：保存用户的历史验证结果，方便回顾
+
+### 已解决的技术问题
+
+- **Vercel 超时**：Hobby 计划函数超时约 12s（maxDuration 配置不生效），已通过拆分 API 解决（/api/expand + /api/analyze 各在 12s 内完成）
+- **fetch 无超时**：所有外部请求已添加 AbortController 超时保护（LLM 10s，数据源 8s）

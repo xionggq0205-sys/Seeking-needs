@@ -249,7 +249,7 @@
         {status==="scanning" && <div style={{marginTop:34}}>
           <div className="dr-sweep" style={{position:"relative",overflow:"hidden",height:3,background:C.lineSoft,borderRadius:2}}/>
           <div style={{display:"flex",alignItems:"center",gap:14,marginTop:22}}><SignalBars count={6} color={C.signal} animate total={6}/><span style={{fontFamily:"var(--mono)",fontSize:13.5,color:C.muted}}>{SCAN_STEPS[stepIdx]}</span></div>
-          <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,marginTop:12}}>抓取 + 分析需要一点时间，通常 15–40 秒，请稍候。</div>
+          <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,marginTop:12}}>扩词 + 抓取 + 分析，通常 10–20 秒，请稍候。</div>
         </div>}
 
         {status==="error" && <div style={{marginTop:30,border:`1px solid ${C.pay}55`,background:"#2a1614",borderRadius:10,padding:"16px 18px"}}>
