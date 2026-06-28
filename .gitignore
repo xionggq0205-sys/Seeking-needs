@@ -1,0 +1,10 @@
+node_modules
+.env
+.env.*
+.vercel
+.DS_Store
+dist
+*.log
+
+# 暂不上传 workflow(token 无 workflow 权限时会被 GitHub 拒绝);需要自动扫描时再放开
+.github/workflows/scan.yml

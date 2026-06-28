@@ -1,0 +1,7 @@
+{
+  "placeholder": true,
+  "generatedAt": null,
+  "theme": "indie maker / micro-SaaS / tool-site pain points",
+  "painPoints": [],
+  "note": "尚未运行扫描。到 GitHub 仓库 Actions → weekly-scan → Run workflow 手动跑一次,或本地执行 npm run scan。"
+}

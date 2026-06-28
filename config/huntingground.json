@@ -1,0 +1,22 @@
+{
+  "theme": "indie maker / micro-SaaS / tool-site pain points",
+  "description": "发现模式监控的狩猎场。queries 是检索词,subreddits 是 Reddit 社区(配了 Reddit 密钥才生效)。按需增删。",
+  "queries": [
+    "I wish there was a tool",
+    "is there a tool for",
+    "too expensive alternative",
+    "manual process annoying",
+    "takes too long automate",
+    "saas alternative cheaper"
+  ],
+  "subreddits": [
+    "SaaS",
+    "Entrepreneur",
+    "startups",
+    "indiehackers",
+    "webdev"
+  ],
+  "perQuery": 8,
+  "sinceDays": 7,
+  "maxPains": 6
+}

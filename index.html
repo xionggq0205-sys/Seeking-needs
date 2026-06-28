@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>需求雷达 / DemandRadar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root{ --body:'Inter',system-ui,sans-serif; --display:'Space Grotesk','Inter',sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
+      --ink:#0F1620; --ink2:#0B1017; --panel:#15202C; --panel2:#1A2733; --line:#26384A; --lineSoft:#1F2E3D;
+      --text:#E8EEF4; --muted:#90A1B2; --faint:#5C6E7F; --signal:#F4A52E; --strong:#46C08C; --pay:#E5604D; --alt:#7FB2E8; }
+    *{ box-sizing:border-box; }
+    html,body{ margin:0; background:var(--ink); color:var(--text); font-family:var(--body); }
+    .dr-btn{ cursor:pointer; transition:transform .12s ease, background .15s ease, border-color .15s ease, color .15s ease; }
+    .dr-btn:active{ transform:translateY(1px); }
+    .dr-go{ background:var(--signal); color:var(--ink); border:1px solid var(--signal); }
+    .dr-go:hover{ background:#ffb648; }
+    .dr-ex:hover{ border-color:var(--signal); color:var(--text); }
+    .dr-tab{ background:transparent; color:var(--faint); border:none; border-bottom:2px solid transparent; }
+    .dr-tab:hover{ color:var(--muted); }
+    .dr-tab-on{ color:var(--text); border-bottom-color:var(--signal); }
+    .dr-card{ animation:dr-rise .45s ease both; }
+    .dr-link{ color:var(--alt); text-decoration:none; border-bottom:1px solid var(--lineSoft); }
+    .dr-link:hover{ border-color:var(--alt); }
+    input.dr-input::placeholder{ color:var(--faint); }
+    input.dr-input:focus{ outline:none; border-color:var(--signal); }
+    button:focus-visible, input:focus-visible{ outline:2px solid var(--signal); outline-offset:2px; }
+    @keyframes dr-rise{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;} }
+    @keyframes dr-pulse{ 0%,100%{ transform:scaleY(.45); opacity:.5;} 50%{ transform:scaleY(1); opacity:1;} }
+    .dr-bar-pulse{ transform-origin:bottom; animation:dr-pulse 1s ease-in-out infinite; }
+    @keyframes dr-sweep{ 0%{ left:-30%; } 100%{ left:100%; } }
+    .dr-sweep::after{ content:''; position:absolute; top:0; bottom:0; width:30%; left:-30%;
+      background:linear-gradient(90deg,transparent,#F4A52E44,transparent); animation:dr-sweep 1.6s linear infinite; }
+    @media (prefers-reduced-motion: reduce){ .dr-bar-pulse,.dr-sweep::after,.dr-card{ animation:none !important; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/plain" id="appsrc">
+    const { useState, useRef, useEffect } = React;
+    const C = { ink:"#0F1620", ink2:"#0B1017", panel:"#15202C", panel2:"#1A2733", line:"#26384A", lineSoft:"#1F2E3D",
+      text:"#E8EEF4", muted:"#90A1B2", faint:"#5C6E7F", signal:"#F4A52E", strong:"#46C08C", pay:"#E5604D", alt:"#7FB2E8" };
+    const SIGNAL_META = { keyword:{label:"关键词",color:C.muted}, complaint:{label:"抱怨",color:C.signal}, alternative:{label:"替代品",color:C.alt}, payment:{label:"付费",color:C.pay} };
+    const STRENGTH_META = { weak:{label:"弱",bars:2,color:C.faint}, medium:{label:"中",bars:4,color:C.signal}, strong:{label:"强",bars:6,color:C.strong} };
+    const TREND_META = { new:{label:"新",mark:"●",color:C.strong}, heating:{label:"变热",mark:"▲",color:C.pay}, cooling:{label:"变冷",mark:"▼",color:C.faint}, steady:{label:"平稳",mark:"—",color:C.muted} };
+    const TREND_ORDER = { new:0, heating:1, steady:2, cooling:3 };
+    const EXAMPLES = ["epub 转换工具","AI 配音","background removal","发票生成器","表格数据清洗"];
+    const SCAN_STEPS = ["扩展英文搜索词…","联网抓取 Hacker News / Reddit…","清洗去噪、跨源去重…","按痛点聚类…","分类信号、计算需求分数…"];
+
+    function SignalBars({count=0,color=C.faint,animate=false,total=6}){
+      return <span style={{display:"inline-flex",alignItems:"flex-end",gap:2,height:16}}>
+        {Array.from({length:total}).map((_,i)=>{ const lit=i<count; const h=5+i*1.8;
+          return <span key={i} className={animate?"dr-bar-pulse":""} style={{width:3,height:h,borderRadius:1,background:lit?color:C.lineSoft,animationDelay:animate?`${i*0.12}s`:undefined}}/>; })}
+      </span>;
+    }
+    function Chip({children,color=C.muted}){ return <span style={{fontFamily:"var(--mono)",fontSize:11.5,color,border:`1px solid ${C.line}`,background:C.ink2,borderRadius:4,padding:"3px 8px",whiteSpace:"nowrap"}}>{children}</span>; }
+    function Eyebrow({children}){ return <div style={{fontFamily:"var(--mono)",fontSize:11,letterSpacing:"0.14em",textTransform:"uppercase",color:C.faint,marginBottom:12}}>{children}</div>; }
+
+    function PainCard({p,i,showTrend}){
+      const sig=SIGNAL_META[p.signalType]||SIGNAL_META.complaint;
+      const st=STRENGTH_META[p.strength]||STRENGTH_META.weak;
+      const tr=showTrend?(TREND_META[p.trend]||TREND_META.steady):null;
+      return <div className="dr-card" style={{border:`1px solid ${C.line}`,background:C.panel,borderRadius:12,padding:"18px 18px 16px",animationDelay:`${i*0.06}s`}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:14,flexWrap:"wrap",alignItems:"flex-start"}}>
+          <div style={{flex:"1 1 320px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              {tr && <span title={tr.label} style={{color:tr.color,fontSize:12}}>{tr.mark}</span>}
+              <span style={{fontFamily:"var(--display)",fontWeight:600,fontSize:16.5,color:C.text}}>{p.title}</span>
+              {tr && <span style={{fontFamily:"var(--mono)",fontSize:10.5,color:tr.color,border:`1px solid ${tr.color}66`,borderRadius:4,padding:"2px 7px"}}>{tr.label}</span>}
+              {p.isRealPain
+                ? <span style={{fontFamily:"var(--mono)",fontSize:10.5,color:C.strong,border:`1px solid ${C.strong}66`,borderRadius:4,padding:"2px 7px"}}>真痛点</span>
+                : <span style={{fontFamily:"var(--mono)",fontSize:10.5,color:C.faint,border:`1px solid ${C.lineSoft}`,borderRadius:4,padding:"2px 7px"}}>未验证</span>}
+            </div>
+            {p.scenario && <div style={{fontSize:13.5,color:C.muted,marginTop:7,lineHeight:1.5}}>{p.scenario}</div>}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
+            <Chip color={sig.color}>{sig.label}信号</Chip>
+            <div style={{display:"flex",alignItems:"center",gap:7}}><SignalBars count={st.bars} color={st.color} total={6}/><span style={{fontFamily:"var(--mono)",fontSize:11,color:st.color}}>{st.label}</span></div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:18,marginTop:12,fontFamily:"var(--mono)",fontSize:11.5,color:C.faint}}>
+          <span>频次 <span style={{color:C.muted}}>{p.frequency??"–"}</span></span>
+          <span>跨平台 <span style={{color:C.muted}}>{p.platformCount??"–"}</span></span>
+        </div>
+        {(p.evidence||[]).length>0 && <div style={{marginTop:14,paddingTop:13,borderTop:`1px solid ${C.lineSoft}`,display:"flex",flexDirection:"column",gap:9}}>
+          {p.evidence.map((ev,j)=><div key={j} style={{display:"flex",gap:10,alignItems:"baseline"}}>
+            <span style={{fontFamily:"var(--mono)",fontSize:10.5,color:C.faint,minWidth:96}}>{ev.source||"来源"}</span>
+            <span style={{fontSize:13,color:C.muted,lineHeight:1.5}}>{ev.snippet} {ev.url && <a className="dr-link" href={ev.url} target="_blank" rel="noopener noreferrer">原帖 ↗</a>}</span>
+          </div>)}
+        </div>}
+      </div>;
+    }
+
+    // ── 验证模式 ──────────────────────────────────────────
+    function Validate(){
+      const [input,setInput]=useState("");
+      const [status,setStatus]=useState("idle");
+      const [result,setResult]=useState(null);
+      const [error,setError]=useState("");
+      const [stepIdx,setStepIdx]=useState(0);
+      const timerRef=useRef(null);
+      useEffect(()=>()=>clearInterval(timerRef.current),[]);
+
+      async function runScan(q){
+        const query=(q??input).trim();
+        if(!query||status==="scanning") return;
+        setStatus("scanning"); setError(""); setResult(null); setStepIdx(0);
+        timerRef.current=setInterval(()=>setStepIdx(i=>(i+1)%SCAN_STEPS.length),2600);
+        try{
+          const res=await fetch("/api/analyze",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({input:query})});
+          const data=await res.json();
+          clearInterval(timerRef.current);
+          if(data.error){ setError(data.error==="parse_failed"?"结果解析失败,可能被截断。请重试或把方向写得更聚焦。":`检索没能完成:${data.error}`); setStatus("error"); return; }
+          if(!data.painPoints){ setError("返回数据异常,请重试。"); setStatus("error"); return; }
+          setResult(data); setStatus("done");
+        }catch(e){ clearInterval(timerRef.current); setError(`检索没能完成:${e.message}`); setStatus("error"); }
+      }
+
+      return <div>
+        <Eyebrow>调谐 · 输入方向(中 / 英均可)</Eyebrow>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          <input className="dr-input" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")runScan();}}
+            placeholder="例如:epub 转换工具 / AI 配音 / background removal"
+            style={{flex:"1 1 360px",background:C.ink2,border:`1px solid ${C.line}`,borderRadius:8,color:C.text,fontFamily:"var(--body)",fontSize:15,padding:"13px 14px"}}/>
+          <button className="dr-btn dr-go" onClick={()=>runScan()} disabled={status==="scanning"} style={{borderRadius:8,fontFamily:"var(--display)",fontWeight:600,fontSize:15,padding:"0 22px",opacity:status==="scanning"?0.6:1}}>{status==="scanning"?"扫描中…":"开始扫描"}</button>
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
+          {EXAMPLES.map(ex=><button key={ex} className="dr-ex dr-btn" onClick={()=>{setInput(ex);runScan(ex);}} style={{fontFamily:"var(--mono)",fontSize:12,color:C.muted,background:"transparent",border:`1px solid ${C.lineSoft}`,borderRadius:20,padding:"5px 12px"}}>{ex}</button>)}
+        </div>
+
+        {status==="scanning" && <div style={{marginTop:34}}>
+          <div className="dr-sweep" style={{position:"relative",overflow:"hidden",height:3,background:C.lineSoft,borderRadius:2}}/>
+          <div style={{display:"flex",alignItems:"center",gap:14,marginTop:22}}><SignalBars count={6} color={C.signal} animate total={6}/><span style={{fontFamily:"var(--mono)",fontSize:13.5,color:C.muted}}>{SCAN_STEPS[stepIdx]}</span></div>
+          <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,marginTop:12}}>抓取 + 分析需要一点时间,通常 15–40 秒,请稍候。</div>
+        </div>}
+
+        {status==="error" && <div style={{marginTop:30,border:`1px solid ${C.pay}55`,background:"#2a1614",borderRadius:10,padding:"16px 18px"}}>
+          <div style={{fontFamily:"var(--mono)",fontSize:12,color:C.pay,letterSpacing:"0.08em",marginBottom:6}}>扫描未完成</div>
+          <div style={{fontSize:14,color:C.text,lineHeight:1.5}}>{error}</div>
+          <button className="dr-btn" onClick={()=>runScan()} style={{marginTop:14,background:C.panel,color:C.text,border:`1px solid ${C.line}`,borderRadius:7,padding:"8px 16px",fontFamily:"var(--display)",fontWeight:600,fontSize:13}}>重试</button>
+        </div>}
+
+        {status==="done" && result && <Report data={result}/>}
+      </div>;
+    }
+
+    function Report({data}){
+      const strength=STRENGTH_META[data.overallStrength]||STRENGTH_META.weak;
+      const score=Math.max(0,Math.min(100,Number(data.demandScore)||0));
+      const decisionColor=data.decision==="GO"?C.strong:data.decision==="NO-GO"?C.pay:C.signal;
+      const mix=data.signalMix||{};
+      const mixTotal=Object.values(mix).reduce((a,b)=>a+(Number(b)||0),0)||1;
+      const exp=data.expansion||{};
+      return <div style={{marginTop:34}}>
+        <div className="dr-card" style={{border:`1px solid ${C.line}`,background:C.panel,borderRadius:12,padding:"22px 22px 20px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",gap:20,flexWrap:"wrap",alignItems:"flex-start"}}>
+            <div>
+              <Eyebrow>需求分数</Eyebrow>
+              <div style={{display:"flex",alignItems:"baseline",gap:8}}><span style={{fontFamily:"var(--display)",fontWeight:700,fontSize:54,lineHeight:1,color:strength.color}}>{score}</span><span style={{fontFamily:"var(--mono)",fontSize:14,color:C.faint}}>/100</span></div>
+              <div style={{marginTop:12,width:220,maxWidth:"60vw",height:5,background:C.lineSoft,borderRadius:3,overflow:"hidden"}}><div style={{width:`${score}%`,height:"100%",background:strength.color}}/></div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint}}>整体信号</span><SignalBars count={strength.bars} color={strength.color} total={6}/><span style={{fontFamily:"var(--display)",fontWeight:600,fontSize:14,color:strength.color}}>{strength.label}</span></div>
+              <div style={{display:"inline-flex",alignItems:"center",gap:8,border:`1px solid ${decisionColor}`,color:decisionColor,borderRadius:6,padding:"6px 12px",fontFamily:"var(--display)",fontWeight:700,fontSize:14}}>{data.decision||"MIXED"}</div>
+            </div>
+          </div>
+          {data.decisionReason && <div style={{marginTop:16,paddingTop:16,borderTop:`1px solid ${C.lineSoft}`,fontSize:14,color:C.muted,lineHeight:1.55}}>{data.decisionReason}</div>}
+          {data.fetchedCount!=null && <div style={{marginTop:10,fontFamily:"var(--mono)",fontSize:10.5,color:C.faint}}>基于 {data.fetchedCount} 条真实抓取的讨论</div>}
+        </div>
+
+        <div style={{marginTop:22}}>
+          <Eyebrow>信号构成</Eyebrow>
+          <div style={{display:"flex",height:8,borderRadius:4,overflow:"hidden",border:`1px solid ${C.lineSoft}`}}>
+            {Object.keys(SIGNAL_META).map(k=>{ const v=Number(mix[k])||0; const pct=(v/mixTotal)*100; if(pct<=0)return null; return <div key={k} style={{width:`${pct}%`,background:SIGNAL_META[k].color}} title={`${SIGNAL_META[k].label}: ${v}`}/>; })}
+          </div>
+          <div style={{display:"flex",gap:16,flexWrap:"wrap",marginTop:10}}>
+            {Object.keys(SIGNAL_META).map(k=><span key={k} style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"var(--mono)",fontSize:11.5,color:C.muted}}><span style={{width:9,height:9,borderRadius:2,background:SIGNAL_META[k].color}}/>{SIGNAL_META[k].label} <span style={{color:C.faint}}>{Number(mix[k])||0}</span></span>)}
+          </div>
+        </div>
+
+        <div style={{marginTop:30}}>
+          <Eyebrow>痛点清单 · 含证据</Eyebrow>
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>{(data.painPoints||[]).map((p,i)=><PainCard key={i} p={p} i={i} showTrend={false}/>)}</div>
+        </div>
+
+        <div style={{marginTop:30}}>
+          <Eyebrow>扩词 · 英文搜索表达</Eyebrow>
+          {exp.englishSearchQuery && <div style={{fontFamily:"var(--mono)",fontSize:13,color:C.text,marginBottom:12}}>“{exp.englishSearchQuery}”</div>}
+          {[["关键词",exp.keywords,C.muted],["相邻问题",exp.relatedTerms,C.alt],["同义/共现",exp.derivativeTerms,C.signal],["平台语境",exp.sourceHints,C.faint],["排除歧义",exp.excludedTerms,C.pay]].map(([label,arr,col])=>
+            (arr||[]).length?<div key={label} style={{display:"flex",gap:8,alignItems:"baseline",marginBottom:9,flexWrap:"wrap"}}><span style={{fontFamily:"var(--mono)",fontSize:10.5,color:C.faint,minWidth:64}}>{label}</span><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{arr.map((t,i)=><Chip key={i} color={col}>{t}</Chip>)}</div></div>:null)}
+        </div>
+
+        {(data.nextSearches||[]).length>0 && <div style={{marginTop:30}}>
+          <Eyebrow>建议的下一步搜索</Eyebrow>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>{data.nextSearches.map((s,i)=><div key={i} style={{display:"flex",gap:10,alignItems:"baseline",fontSize:13.5,color:C.muted}}><span style={{color:C.signal,fontFamily:"var(--mono)"}}>→</span><span style={{fontFamily:"var(--mono)",fontSize:12.5}}>{s}</span></div>)}</div>
+        </div>}
+
+        <div style={{marginTop:34,paddingTop:16,borderTop:`1px solid ${C.lineSoft}`,fontFamily:"var(--mono)",fontSize:10.5,color:C.faint,lineHeight:1.6}}>证据来自真实抓取的公开讨论,片段为摘要转述,请点「原帖」核对原文。需求分数是辅助判断,不构成保证 — 最终决策仍需你自己拍板。</div>
+      </div>;
+    }
+
+    // ── 发现模式 ──────────────────────────────────────────
+    function Discover(){
+      const [snap,setSnap]=useState(undefined); // undefined=loading
+      useEffect(()=>{
+        fetch("./data/latest.json",{cache:"no-store"})
+          .then(r=>r.ok?r.json():null)
+          .then(d=>{ if(!d||d.placeholder||!d.generatedAt) setSnap(null); else setSnap(d); })
+          .catch(()=>setSnap(null));
+      },[]);
+
+      if(snap===undefined) return <div style={{marginTop:30,fontFamily:"var(--mono)",fontSize:13,color:C.muted}}>读取最新快照…</div>;
+
+      if(snap===null) return <div style={{marginTop:30,border:`1px solid ${C.line}`,background:C.panel,borderRadius:12,padding:"22px"}}>
+        <Eyebrow>还没有快照</Eyebrow>
+        <div style={{fontSize:14,color:C.muted,lineHeight:1.65}}>
+          发现模式由每周一次的定时任务生成。第一次需要手动触发一下:<br/>
+          · GitHub 仓库 → <span style={{color:C.text}}>Actions</span> → <span style={{color:C.text}}>weekly-scan</span> → <span style={{color:C.text}}>Run workflow</span>;<br/>
+          · 或本地执行 <span style={{fontFamily:"var(--mono)",color:C.signal}}>npm run scan</span>(需先配置 ANTHROPIC_API_KEY)。<br/>
+          跑完会把快照提交进仓库的 <span style={{fontFamily:"var(--mono)"}}>data/</span> 目录,这里就会显示「本周新痛点 / 正在变热」。
+        </div>
+      </div>;
+
+      const pains=[...(snap.painPoints||[])].sort((a,b)=>{
+        const t=(TREND_ORDER[a.trend]??9)-(TREND_ORDER[b.trend]??9); if(t) return t;
+        const s=(STRENGTH_META[b.strength]?.bars||0)-(STRENGTH_META[a.strength]?.bars||0); if(s) return s;
+        return (b.frequency||0)-(a.frequency||0);
+      });
+      const dateStr=new Date(snap.generatedAt).toLocaleString();
+
+      return <div style={{marginTop:30}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",flexWrap:"wrap",gap:12}}>
+          <Eyebrow>本周狩猎 · {snap.theme}</Eyebrow>
+          <span style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint}}>更新于 {dateStr} · {snap.fetchedCount??"–"} 条讨论</span>
+        </div>
+        <div style={{display:"flex",gap:14,flexWrap:"wrap",marginBottom:18}}>
+          {Object.keys(TREND_META).map(k=><span key={k} style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"var(--mono)",fontSize:11,color:C.faint}}><span style={{color:TREND_META[k].color}}>{TREND_META[k].mark}</span>{TREND_META[k].label}</span>)}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>{pains.map((p,i)=><PainCard key={i} p={p} i={i} showTrend={true}/>)}</div>
+        {(snap.nextSearches||[]).length>0 && <div style={{marginTop:28}}>
+          <Eyebrow>建议深挖</Eyebrow>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>{snap.nextSearches.map((s,i)=><div key={i} style={{display:"flex",gap:10,alignItems:"baseline",fontSize:13.5,color:C.muted}}><span style={{color:C.signal,fontFamily:"var(--mono)"}}>→</span><span style={{fontFamily:"var(--mono)",fontSize:12.5}}>{s}</span></div>)}</div>
+        </div>}
+        <div style={{marginTop:30,paddingTop:16,borderTop:`1px solid ${C.lineSoft}`,fontFamily:"var(--mono)",fontSize:10.5,color:C.faint,lineHeight:1.6}}>趋势按与上次快照对比得出。要换监控范围,改仓库里的 config/huntingground.json。</div>
+      </div>;
+    }
+
+    function App(){
+      const [tab,setTab]=useState("validate");
+      return <div style={{minHeight:"100vh"}}>
+        <div style={{maxWidth:860,margin:"0 auto",padding:"40px 22px 64px"}}>
+          <header style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <SignalBars count={6} color={C.signal} total={6}/>
+              <div>
+                <div style={{fontFamily:"var(--display)",fontWeight:700,fontSize:22,letterSpacing:"-0.01em"}}>需求雷达 <span style={{color:C.signal}}>/</span> DemandRadar</div>
+                <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,marginTop:2,letterSpacing:"0.04em"}}>MVP · 找信号,不找灵感</div>
+              </div>
+            </div>
+            <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,maxWidth:240,textAlign:"right"}}>抓真实讨论,输出带证据的需求判断</div>
+          </header>
+
+          <div style={{display:"flex",gap:24,marginTop:24,borderBottom:`1px solid ${C.lineSoft}`}}>
+            <button className={"dr-btn dr-tab "+(tab==="validate"?"dr-tab-on":"")} onClick={()=>setTab("validate")} style={{fontFamily:"var(--display)",fontWeight:600,fontSize:14,padding:"0 0 10px"}}>验证 · 主动查一个方向</button>
+            <button className={"dr-btn dr-tab "+(tab==="discover"?"dr-tab-on":"")} onClick={()=>setTab("discover")} style={{fontFamily:"var(--display)",fontWeight:600,fontSize:14,padding:"0 0 10px"}}>发现 · 本周新痛点</button>
+          </div>
+
+          {tab==="validate" ? <div style={{marginTop:28}}><Validate/></div> : <Discover/>}
+        </div>
+      </div>;
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+  <script>
+    (function () {
+      try {
+        var src = document.getElementById("appsrc").textContent;
+        var out = Babel.transform(src, { presets: [["react", { runtime: "classic" }]] }).code;
+        (0, eval)(out);
+      } catch (e) {
+        console.error(e);
+        document.getElementById("root").innerHTML =
+          '<pre style="color:#E5604D;font-family:monospace;padding:28px;white-space:pre-wrap;font-size:13px;">页面脚本出错：' +
+          ((e && e.message) ? e.message : e) + '</pre>';
+      }
+    })();
+  </script>
+</body>
+</html>
