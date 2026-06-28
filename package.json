@@ -7,5 +7,5 @@
   "scripts": {
     "scan": "node scripts/scan.js"
   },
-  "engines": { "node": ">=18" }
+  "engines": { "node": "20.x" }
 }

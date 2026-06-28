@@ -1,9 +1,7 @@
 {
-  "buildCommand": "",
-  "framework": null,
   "functions": {
     "api/**/*.js": {
-      "runtime": "nodejs18.x"
+      "maxDuration": 60
     }
   }
 }
