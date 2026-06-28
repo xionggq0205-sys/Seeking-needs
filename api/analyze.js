@@ -1,9 +1,9 @@
 // Vercel Serverless Function — POST /api/analyze
-// 流程:扩词(模型) → 抓真实数据(HN + 可选 Reddit) → 基于证据做痛点分析(模型)。
-// 模型走兼容 OpenAI 的接口(默认 DeepSeek),见 lib/claude.js。
+// 流程: 扩词(模型) → 抓真实数据(HN + 可选 Reddit) → 过滤噪音 → 基于证据做痛点分析(模型)。
 
-import { expandQuery, buildQueries, analyzeCorpus } from "../lib/analyze.js";
+import { expandQuery, buildQueries, analyzeCorpus, filterByExcluded, filterNoise } from "../lib/analyze.js";
 import { gather } from "../lib/sources.js";
+import { costTracker } from "../lib/llm.js";
 
 export const config = { maxDuration: 60 };
 
@@ -24,9 +24,15 @@ export default async function handler(req, res) {
       return;
     }
 
+    costTracker.reset();
+
     const expansion = await expandQuery(input);
     const queries = buildQueries(expansion, input);
-    const items = await gather(queries, { perQuery: 7, sinceDays: 540 });
+    let items = await gather(queries, { perQuery: 7, sinceDays: 540 });
+
+    items = filterByExcluded(items, expansion.excludedTerms);
+    items = filterNoise(items);
+
     const report = await analyzeCorpus(input, items, { maxPains: 3 });
     if (report.error) {
       res.status(200).json(report);
@@ -34,6 +40,7 @@ export default async function handler(req, res) {
     }
     report.expansion = expansion;
     report.fetchedCount = items.length;
+    report.llmUsage = costTracker.summary();
     res.status(200).json(report);
   } catch (e) {
     res.status(500).json({ error: e.message || "unknown error" });

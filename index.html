@@ -221,7 +221,7 @@
         <div style={{fontSize:14,color:C.muted,lineHeight:1.65}}>
           发现模式由每周一次的定时任务生成。第一次需要手动触发一下:<br/>
           · GitHub 仓库 → <span style={{color:C.text}}>Actions</span> → <span style={{color:C.text}}>weekly-scan</span> → <span style={{color:C.text}}>Run workflow</span>;<br/>
-          · 或本地执行 <span style={{fontFamily:"var(--mono)",color:C.signal}}>npm run scan</span>(需先配置 ANTHROPIC_API_KEY)。<br/>
+          · 或本地执行 <span style={{fontFamily:"var(--mono)",color:C.signal}}>npm run scan</span>（需先配置 LLM_API_KEY）。<br/>
           跑完会把快照提交进仓库的 <span style={{fontFamily:"var(--mono)"}}>data/</span> 目录,这里就会显示「本周新痛点 / 正在变热」。
         </div>
       </div>;

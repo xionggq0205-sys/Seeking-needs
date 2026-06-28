@@ -4,9 +4,9 @@
 
 | 项 | 内容 |
 |---|---|
-| 文档版本 | v1（初稿） |
-| 日期 | 2026-06-27 |
-| 状态 | 待评审 / 用于驱动 V1 开发 |
+| 文档版本 | v1.1（开发进度更新） |
+| 日期 | 2026-06-28 |
+| 状态 | V1+V2 核心功能已实现，待实跑验证 |
 | 产品定位 | **先自用**，验证有效后再考虑对外卖 |
 | 开发方式 | 个人 + AI 辅助开发 |
 | 一句话定义 | 一个持续在英文社区里挖掘"反复出现、且有人愿意付费"的痛点的研究引擎；也能随时对一个想法做深度验证；每条结论都能追溯到真实原帖；并能追踪痛点在变热还是变冷，最终为有潜力的方向产出一份带证据的 BRD（功能 / 定价 / 推广）。 |
@@ -388,3 +388,72 @@
 ## 附录 C：12 个免费调查工具
 
 Google Trends、SimilarWeb、Ubersuggest、Reddit、Product Hunt、G2、Capterra、Trustpilot、Chrome 应用商店、Statista、Google Keyword Planner、Facebook Groups。
+
+---
+
+## 附录 D：V0.3 开发进度（2026-06-28 更新）
+
+### 技术栈实际选型
+
+| 项 | 实际选择 | 说明 |
+|---|---|---|
+| 语言 | Node.js 18+ ESM | 零 npm 依赖，全局 fetch |
+| LLM | DeepSeek（兼容 OpenAI 接口） | 通过 `LLM_BASE_URL` / `LLM_MODEL` 可切换任意兼容模型 |
+| 前端 | CDN React + Babel（单文件 index.html） | 零构建步骤 |
+| 部署 | Vercel Serverless + GitHub Actions | 验证模式走 Vercel，发现模式走 Actions 定时任务 |
+| 存储 | 仓库内 JSON 快照（data/） | 无数据库，扫描结果直接 commit 回仓库 |
+
+### V1 功能完成情况
+
+| FR | 需求 | 状态 | 备注 |
+|---|---|---|---|
+| FR-1.1 | 中/英文方向输入 | ✅ 已实现 | |
+| FR-1.2 | 扩词（固定 schema） | ✅ 已实现 | 含 derivativeTerms / sourceHints / excludedTerms |
+| FR-1.3 | 生成搜索查询集 | ✅ 已实现 | buildQueries() 合并所有扩词字段，上限 8 条 |
+| FR-1.4 | 扩词结果可编辑 | ❌ 未实现 | 当前扩词结果仅展示，不可编辑后重新检索 |
+| FR-2.1 | 可插拔数据源 | ✅ 已实现 | lib/sources.js，每个源独立导出 |
+| FR-2.2 | HN + Reddit 接入 | ✅ 已实现 | Google Trends 未接入 |
+| FR-2.5 | 采集结果带元数据 | ✅ 已实现 | source / url / points / comments / createdAt |
+| FR-3.1 | 噪音过滤 | ✅ 已实现 | filterNoise() + filterByExcluded() |
+| FR-3.2 | 跨源去重 | ✅ 已实现 | gather() 按 URL 去重 |
+| FR-3.3 | 痛点聚类 | ✅ 已实现 | LLM 驱动的聚类分析 |
+| FR-4.1-4.4 | 信号分类+打分+真痛点 | ✅ 已实现 | 四分类 + 三档强度 + ≥3次/≥2平台规则 |
+| FR-5.1-5.2 | 证据链可追溯 | ✅ 已实现 | 每条痛点附带原帖链接 |
+| FR-6.1-6.3 | 验证模式 | ✅ 已实现 | POST /api/analyze，含弱需求如实输出 |
+| FR-10.1 | Markdown 报告导出 | ❌ 未实现 | 当前仅 JSON，无 Markdown 导出按钮 |
+| FR-11.1 | 前端 UI | ✅ 已实现 | 验证 + 发现两个标签页 |
+| FR-11.3 | 历史报告检索/对比 | ❌ 未实现 | |
+
+### V2 功能完成情况
+
+| FR | 需求 | 状态 | 备注 |
+|---|---|---|---|
+| FR-7.1 | 可配置狩猎场 | ✅ 已实现 | config/huntingground.json |
+| FR-7.2 | 定时扫描+机会卡 | ✅ 已实现 | scripts/scan.js + GitHub Actions |
+| FR-7.3 | 新/变热标记 | ✅ 已实现 | lib/trends.js Jaccard 相似度对比 |
+| FR-7.4 | 每周摘要 | ✅ 已实现 | .github/workflows/scan.yml 每周一 8:00 UTC |
+| FR-8.1 | 历史快照存储 | ✅ 已实现 | data/snapshots/ 按日期存 JSON |
+| FR-8.2 | 变热/变冷/平稳标注 | ✅ 已实现 | 4 种趋势状态 |
+| FR-8.3 | Google Trends 集成 | ❌ 未实现 | |
+
+### 兜底策略实现情况（§7）
+
+| 兜底项 | 状态 | 实现方式 |
+|---|---|---|
+| 数据源兜底（跳过故障源） | ✅ | gather() 中 .catch() 容错，sourceStatus 记录 |
+| 指数退避重试 | ✅ | sources.js fetchWithRetry() + llm.js withRetry() |
+| 结果缓存 | ✅ | sources.js 内存缓存，10 分钟 TTL |
+| LLM 主/备模型切换 | ✅ | llm.js LLM_BACKUP_KEY/URL/MODEL |
+| 成本硬护栏 | ✅ | costTracker，调用次数 + token 双上限 |
+| 噪音过滤 | ✅ | filterNoise() 正则匹配 + filterByExcluded() |
+| 弱需求如实输出 | ✅ | analyzeCorpus() 空语料返回 NO-GO |
+| 原始数据保存 | ✅ | scan.js 分析前先写 *-raw.json |
+
+### 待开发项（按优先级）
+
+1. **FR-1.4 扩词结果可编辑**：前端允许用户修改扩词结果后重新检索
+2. **FR-10.1 Markdown 导出**：报告页添加"导出 Markdown"按钮
+3. **FR-11.3 历史报告浏览**：发现页支持浏览历史快照、对比不同周
+4. **Google Trends 接入**：补充关键词趋势数据源
+5. **Vercel 超时优化**：当前 maxDuration=60s，PRD 目标 3-5 分钟；大方向需考虑流式响应或拆分请求
+6. **V3 BRD 深度分析**：竞品拆解、用户画像、TAM-SAM-SOM、定价、GO/NO-GO 完整输出
