@@ -214,9 +214,14 @@
         setStatus("scanning"); setError(""); setResult(null); setStepIdx(0);
         timerRef.current=setInterval(()=>setStepIdx(i=>(i+1)%SCAN_STEPS.length),2600);
         try{
-          const payload = {input:query};
-          if(customExpansion) payload.expansion = customExpansion;
-          const res=await fetch("/api/analyze",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});
+          let expansion = customExpansion;
+          if(!expansion){
+            const expRes=await fetch("/api/expand",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({input:query})});
+            const expData=await expRes.json();
+            if(expData.error){ clearInterval(timerRef.current); setError(expData.error); setStatus("error"); return; }
+            expansion=expData.expansion;
+          }
+          const res=await fetch("/api/analyze",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({input:query,expansion})});
           const data=await res.json();
           clearInterval(timerRef.current);
           if(data.error){ setError(data.error==="parse_failed"?"结果解析失败，可能被截断。请重试或把方向写得更聚焦。":data.error); setStatus("error"); return; }

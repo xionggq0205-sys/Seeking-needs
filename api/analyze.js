@@ -1,12 +1,10 @@
 // Vercel Serverless Function — POST /api/analyze
-// 流程: 扩词(模型) → 抓真实数据(HN + 可选 Reddit) → 过滤噪音 → 基于证据做痛点分析(模型)。
-// 支持传入自定义 expansion 跳过扩词步骤（用于用户编辑扩词后重新检索）。
+// 流程: 抓真实数据(HN + 可选 Reddit) → 过滤噪音 → 基于证据做痛点分析(模型)。
+// 必须传入 expansion（由 /api/expand 返回），避免单个函数内做两次 LLM 调用超时。
 
-import { expandQuery, buildQueries, analyzeCorpus, filterByExcluded, filterNoise } from "../lib/analyze.js";
+import { buildQueries, analyzeCorpus, filterByExcluded, filterNoise } from "../lib/analyze.js";
 import { gather } from "../lib/sources.js";
 import { costTracker } from "../lib/llm.js";
-
-export const config = { maxDuration: 60 };
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -20,16 +18,17 @@ export default async function handler(req, res) {
       res.status(400).json({ error: "缺少 input 字段" });
       return;
     }
+    if (!body.expansion || !body.expansion.englishSearchQuery) {
+      res.status(400).json({ error: "缺少 expansion 字段，请先调用 /api/expand" });
+      return;
+    }
     if (!process.env.LLM_API_KEY) {
-      res.status(500).json({ error: "服务器未配置 LLM_API_KEY 环境变量。请在 Vercel 项目 Settings → Environment Variables 中添加 LLM_API_KEY（DeepSeek API Key）。" });
+      res.status(500).json({ error: "服务器未配置 LLM_API_KEY 环境变量。请在 Vercel 项目 Settings → Environment Variables 中添加 LLM_API_KEY。" });
       return;
     }
 
     costTracker.reset();
-
-    const expansion = body.expansion && body.expansion.englishSearchQuery
-      ? body.expansion
-      : await expandQuery(input);
+    const expansion = body.expansion;
 
     const queries = buildQueries(expansion, input);
     let items = await gather(queries, { perQuery: 7, sinceDays: 540 });
