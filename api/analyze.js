@@ -46,7 +46,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    await withTimeout(doWork(), 11_000);
+    await withTimeout(doWork(), 55_000);
   } catch (e) {
     if (!res.headersSent) {
       res.status(500).json({ error: e.message || "unknown error" });
