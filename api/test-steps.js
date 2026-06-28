@@ -31,6 +31,16 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, step, ms: Date.now() - t0, report });
     }
 
+    if (step === "two-llm") {
+      const expansion = await expandQuery(input);
+      const t1 = Date.now();
+      const fakeItems = [
+        { source: "Hacker News", title: "Best epub converter?", text: "I need to convert epub to pdf, calibre is too slow", url: "https://hn.example.com/1", points: 42, comments: 15 },
+      ];
+      const report = await analyzeCorpus(input, fakeItems, { maxPains: 1, maxTokens: 1000 });
+      return res.status(200).json({ ok: true, step, expandMs: t1 - t0, analyzeMs: Date.now() - t1, totalMs: Date.now() - t0 });
+    }
+
     if (step === "full") {
       const expansion = await expandQuery(input);
       const t1 = Date.now();
