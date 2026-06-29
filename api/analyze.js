@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     items = filterNoise(items);
     items = items.slice(0, 20);
 
-    const report = await analyzeCorpus(input, items, { maxPains: 3, maxTokens: 1500 });
+    const report = await analyzeCorpus(input, items, { maxPains: 3, maxTokens: 3500 });
     if (report.error) return res.status(200).json(report);
     report.expansion = expansion;
     report.fetchedCount = items.length;
