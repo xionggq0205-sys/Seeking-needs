@@ -178,6 +178,19 @@
             md += `\n`;
           }
         }
+
+        if((brd.thread||[]).length){
+          md += `### 追问记录\n\n`;
+          brd.thread.forEach((t,i)=>{
+            md += `**Q${i+1}.** ${t.q}\n\n`;
+            md += `${t.a}\n\n`;
+            md += `> 置信度：${t.confidence||"medium"}\n\n`;
+            if((t.citations||[]).length){
+              t.citations.forEach(c=>{ md += `- [${c.index}] ${c.source||"–"}: ${c.snippet||"–"}${c.url?` ([原帖](${c.url}))`:""}\n`; });
+              md += `\n`;
+            }
+          });
+        }
       }
 
       md += `---\n\n*证据来自真实抓取的公开讨论，片段为摘要转述，请点原帖核对。需求分数与 BRD 是辅助判断，不构成保证。*\n`;
@@ -236,7 +249,32 @@
     const WTP = { unknown:{label:"未知",color:C.faint}, low:{label:"低",color:C.faint}, medium:{label:"中",color:C.signal}, high:{label:"高",color:C.strong} };
     const MARKET = { tiny:{label:"小众",color:C.faint}, niche:{label:"细分",color:C.muted}, broad:{label:"广阔",color:C.signal}, massive:{label:"庞大",color:C.strong} };
 
-    function BRDCard({brd}){
+    const ASK_SUGGESTIONS = [
+      "如何验证用户付费意愿？",
+      "MVP 应该砍掉哪些功能？",
+      "竞品的弱点怎么具体复现？",
+      "为什么定价是这个区间？",
+    ];
+
+    function BRDCard({brd, input, expansion, onUpdate}){
+      const [askInput,setAskInput]=useState("");
+      const [askStatus,setAskStatus]=useState("idle");
+      const [askError,setAskError]=useState("");
+
+      async function ask(q){
+        const question=(q||"").trim();
+        if(!question || !brd || !brd.decision || askStatus==="loading") return;
+        setAskStatus("loading"); setAskError(""); setAskInput("");
+        try{
+          const res=await fetch("/api/brd-ask",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({input,expansion,brd,question})});
+          const r=await res.json();
+          if(r.error && !r.answer){ setAskError(r.error); setAskStatus("error"); return; }
+          const entry={ q:question, a:r.answer, citations:r.citations||[], confidence:r.confidence||"medium", ts:Date.now() };
+          if(onUpdate) onUpdate({...brd, thread:[...(brd.thread||[]), entry]});
+          setAskStatus("done");
+        }catch(e){ setAskError("网络错误："+e.message); setAskStatus("error"); }
+      }
+
       if(!brd) return null;
       if(brd.error) return <div style={{marginTop:18,border:`1px solid ${C.pay}55`,background:"#2a1614",borderRadius:10,padding:"14px 16px",fontSize:13,color:C.text}}>BRD 解析失败：{brd.error}</div>;
       if(brd.thin) return <div style={{marginTop:18,border:`1px solid ${C.lineSoft}`,background:C.panel,borderRadius:10,padding:"14px 16px",fontFamily:"var(--mono)",fontSize:12.5,color:C.muted}}>{brd.reason||"语料不足，无法生成 BRD。"}</div>;
@@ -344,6 +382,70 @@
               {sugg.reasoning && <div style={{fontSize:12.5,color:C.muted,lineHeight:1.5}}>{sugg.reasoning}</div>}
             </div>}
           </div> : null}
+        </div>
+
+        {/* 追问 Q&A */}
+        <div style={{marginTop:22,paddingTop:18,borderTop:`1px solid ${C.lineSoft}`}}>
+          <SectionHead>追问 · 基于 BRD 与新抓取语料</SectionHead>
+
+          {/* 历史 Q&A 线 */}
+          {(brd.thread||[]).length>0 && <div style={{display:"flex",flexDirection:"column",gap:14,marginBottom:14}}>
+            {brd.thread.map((t,i)=>{
+              const cf=t.confidence==="high"?C.strong:t.confidence==="low"?C.pay:C.signal;
+              return <div key={i} style={{border:`1px solid ${C.lineSoft}`,background:C.ink2,borderRadius:8,padding:"12px 14px"}}>
+                <div style={{display:"flex",gap:10,alignItems:"baseline",marginBottom:8}}>
+                  <span style={{fontFamily:"var(--mono)",fontSize:10.5,color:C.faint,minWidth:18}}>Q</span>
+                  <span style={{flex:1,fontSize:13.5,color:C.text,fontWeight:500}}>{t.q}</span>
+                </div>
+                <div style={{display:"flex",gap:10,alignItems:"baseline"}}>
+                  <span style={{fontFamily:"var(--mono)",fontSize:10.5,color:cf,minWidth:18}}>A</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13.5,color:C.muted,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{t.a}</div>
+                    <div style={{marginTop:6,fontFamily:"var(--mono)",fontSize:10.5,color:C.faint}}>置信度 <span style={{color:cf}}>{t.confidence}</span></div>
+                    {(t.citations||[]).length>0 && <div style={{marginTop:8,paddingTop:8,borderTop:`1px dashed ${C.lineSoft}`,display:"flex",flexDirection:"column",gap:5}}>
+                      {t.citations.map((c,j)=><div key={j} style={{display:"flex",gap:8,alignItems:"baseline"}}>
+                        <span style={{fontFamily:"var(--mono)",fontSize:10.5,color:cf,minWidth:24}}>[{c.index}]</span>
+                        <span style={{fontFamily:"var(--mono)",fontSize:10.5,color:C.faint,minWidth:78}}>{c.source||"–"}</span>
+                        <span style={{fontSize:12,color:C.muted,lineHeight:1.5,flex:1}}>{c.snippet} {c.url && <a className="dr-link" href={c.url} target="_blank" rel="noopener noreferrer">原帖 ↗</a>}</span>
+                      </div>)}
+                    </div>}
+                  </div>
+                </div>
+              </div>;
+            })}
+          </div>}
+
+          {/* 输入区 */}
+          <div style={{display:"flex",gap:8,alignItems:"flex-end",flexWrap:"wrap"}}>
+            <textarea
+              value={askInput}
+              onChange={e=>setAskInput(e.target.value)}
+              onKeyDown={e=>{ if(e.key==="Enter" && (e.metaKey||e.ctrlKey)){ e.preventDefault(); ask(askInput); } }}
+              placeholder="对 BRD 追问（Ctrl/⌘+Enter 发送）…"
+              disabled={askStatus==="loading"}
+              rows={2}
+              style={{flex:"1 1 360px",background:C.ink2,color:C.text,border:`1px solid ${C.line}`,borderRadius:7,padding:"9px 12px",fontFamily:"var(--text)",fontSize:13.5,resize:"vertical",minHeight:38,outline:"none"}}
+            />
+            <button className="dr-btn" onClick={()=>ask(askInput)} disabled={askStatus==="loading"||!askInput.trim()}
+              style={{background:C.signal,color:C.ink,border:`1px solid ${C.signal}`,borderRadius:7,padding:"9px 18px",fontFamily:"var(--display)",fontWeight:600,fontSize:13,opacity:(askStatus==="loading"||!askInput.trim())?0.5:1}}>
+              {askStatus==="loading"?"追问中…":"发送"}
+            </button>
+          </div>
+
+          {/* 快捷问题 */}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>
+            {ASK_SUGGESTIONS.map(s=><button key={s} className="dr-btn" onClick={()=>ask(s)} disabled={askStatus==="loading"}
+              style={{background:"transparent",color:C.muted,border:`1px solid ${C.lineSoft}`,borderRadius:14,padding:"4px 11px",fontFamily:"var(--mono)",fontSize:11,opacity:askStatus==="loading"?0.5:1}}>
+              {s}
+            </button>)}
+          </div>
+
+          {/* 状态 */}
+          {askStatus==="loading" && <div style={{marginTop:12,display:"flex",alignItems:"center",gap:10}}>
+            <SignalBars count={4} color={C.signal} animate total={4}/>
+            <span style={{fontFamily:"var(--mono)",fontSize:11.5,color:C.muted}}>抓取相关讨论 + 生成回答…</span>
+          </div>}
+          {askStatus==="error" && <div style={{marginTop:12,fontSize:12.5,color:C.pay}}>{askError}</div>}
         </div>
       </div>;
     }
@@ -593,7 +695,7 @@
           <div style={{fontSize:13.5,color:C.text}}>{brdError}</div>
           <button className="dr-btn" onClick={runDeepen} style={{marginTop:10,background:C.panel,color:C.text,border:`1px solid ${C.line}`,borderRadius:6,padding:"6px 14px",fontFamily:"var(--mono)",fontSize:12}}>重试</button>
         </div>}
-        {brd && brdStatus==="done" && <BRDCard brd={brd}/>}
+        {brd && brdStatus==="done" && <BRDCard brd={brd} input={data.input} expansion={origExp} onUpdate={(updated)=>{ setBrd(updated); if(onDeepen) onDeepen(updated); }}/>}
 
         <div style={{marginTop:22}}>
           <Eyebrow>信号构成</Eyebrow>

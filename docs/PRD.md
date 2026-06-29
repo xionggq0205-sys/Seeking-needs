@@ -482,3 +482,4 @@ Google Trends、SimilarWeb、Ubersuggest、Reddit、Product Hunt、G2、Capterra
 |  | GO/NO-GO 决策 | ✅ | verdict + 置信度 + 风险/机会/下一步（各 1-3 条） |
 |  | BRD Markdown 导出 | ✅ | 已合并到「导出 Markdown」按钮，BRD 已生成时一并输出 |
 |  | BRD 历史持久化 | ✅ | BRD 自动合并进当前 result 与 localStorage 最近一条历史 |
+|  | BRD 多轮追问 | ✅ | POST /api/brd-ask + lib/brdAsk.js：基于 BRD 上下文 + 针对问题抓取的新语料，单次 LLM 调用产出可引用回答；UI 含 4 个快捷问题、Ctrl/⌘+Enter 发送；追问线程持久化进历史与 Markdown |
