@@ -116,7 +116,71 @@
         md += `\n`;
       }
 
-      md += `---\n\n*证据来自真实抓取的公开讨论，片段为摘要转述，请点原帖核对。需求分数是辅助判断，不构成保证。*\n`;
+      // BRD 深度分析（如已生成）
+      const brd=data.brd;
+      if(brd && brd.decision){
+        const dec=brd.decision||{};
+        const persona=brd.persona||{};
+        const market=brd.marketSize||{};
+        const pricing=brd.pricing||{};
+        const sugg=pricing.suggested||{};
+        md += `## BRD 深度分析\n\n`;
+        md += `**决策**：${dec.verdict||"MIXED"} · 置信度 ${dec.confidence??"–"}/100\n\n`;
+        if((dec.risks||[]).length){ md += `**风险**\n`; dec.risks.forEach(s=>{ md += `- ${s}\n`; }); md += `\n`; }
+        if((dec.opportunities||[]).length){ md += `**机会**\n`; dec.opportunities.forEach(s=>{ md += `- ${s}\n`; }); md += `\n`; }
+        if((dec.nextSteps||[]).length){ md += `**下一步**\n`; dec.nextSteps.forEach(s=>{ md += `- ${s}\n`; }); md += `\n`; }
+
+        if(persona.description){
+          md += `### 用户画像\n\n${persona.description}\n\n`;
+          md += `- 痛点强度：${(PAIN_LEVEL[persona.painLevel]||{}).label||persona.painLevel||"–"}\n`;
+          md += `- 付费意愿：${(WTP[persona.willingnessToPay]||{}).label||persona.willingnessToPay||"–"}\n`;
+          if((persona.alternativesTried||[]).length) md += `- 试过的替代品：${persona.alternativesTried.join("、")}\n`;
+          md += `\n`;
+          if((persona.quotes||[]).length){
+            md += `| 来源 | 引述 | 原帖 |\n|---|---|---|\n`;
+            persona.quotes.forEach(q=>{ md += `| ${q.source||"–"} | "${q.snippet||"–"}" | ${q.url?`[原帖](${q.url})`:"–"} |\n`; });
+            md += `\n`;
+          }
+        }
+
+        if((brd.competitors||[]).length){
+          md += `### 主要竞品\n\n`;
+          brd.competitors.forEach((c,i)=>{
+            md += `**${i+1}. ${c.name}**${c.url?` · [官网](${c.url})`:""}\n\n`;
+            if(c.positioning) md += `- 定位：${c.positioning}\n`;
+            if(c.weakness) md += `- 弱点：${c.weakness}\n`;
+            if((c.evidence||[]).length){
+              md += `- 证据：\n`;
+              c.evidence.forEach(ev=>{ md += `  - ${ev.source||"–"}: ${ev.snippet||"–"}${ev.url?` ([原帖](${ev.url}))`:""}\n`; });
+            }
+            md += `\n`;
+          });
+        }
+
+        if(market.reasoning){
+          md += `### 市场规模\n\n`;
+          md += `- 信号：**${(MARKET[market.signal]||{}).label||market.signal||"–"}**（${market.signal||"–"}）\n`;
+          md += `- 理由：${market.reasoning}\n`;
+          if((market.indicators||[]).length){ md += `- 信号源：\n`; market.indicators.forEach(s=>{ md += `  - ${s}\n`; }); }
+          md += `\n`;
+        }
+
+        if((pricing.benchmarks||[]).length || sugg.range){
+          md += `### 定价\n\n`;
+          if((pricing.benchmarks||[]).length){
+            md += `**对标**\n\n| 竞品 | 套餐 | 价格 |\n|---|---|---|\n`;
+            pricing.benchmarks.forEach(b=>{ md += `| ${b.competitor||"–"} | ${b.plan||"–"} | ${b.price||"–"} |\n`; });
+            md += `\n`;
+          }
+          if(sugg.range){
+            md += `**建议**\n\n- 模型：${sugg.model||"–"}\n- 区间：**${sugg.range}**\n`;
+            if(sugg.reasoning) md += `- 理由：${sugg.reasoning}\n`;
+            md += `\n`;
+          }
+        }
+      }
+
+      md += `---\n\n*证据来自真实抓取的公开讨论，片段为摘要转述，请点原帖核对。需求分数与 BRD 是辅助判断，不构成保证。*\n`;
       return md;
     }
 
@@ -164,6 +228,123 @@
           : <button onClick={()=>setAdding(true)}
               style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,background:"transparent",border:`1px dashed ${C.lineSoft}`,borderRadius:4,padding:"3px 8px",cursor:"pointer"}}>+ 添加</button>
         }
+      </div>;
+    }
+
+    // ── BRD 深度分析卡 ──────────────────────────────────
+    const PAIN_LEVEL = { low:{label:"低",color:C.faint}, medium:{label:"中",color:C.signal}, high:{label:"高",color:C.pay} };
+    const WTP = { unknown:{label:"未知",color:C.faint}, low:{label:"低",color:C.faint}, medium:{label:"中",color:C.signal}, high:{label:"高",color:C.strong} };
+    const MARKET = { tiny:{label:"小众",color:C.faint}, niche:{label:"细分",color:C.muted}, broad:{label:"广阔",color:C.signal}, massive:{label:"庞大",color:C.strong} };
+
+    function BRDCard({brd}){
+      if(!brd) return null;
+      if(brd.error) return <div style={{marginTop:18,border:`1px solid ${C.pay}55`,background:"#2a1614",borderRadius:10,padding:"14px 16px",fontSize:13,color:C.text}}>BRD 解析失败：{brd.error}</div>;
+      if(brd.thin) return <div style={{marginTop:18,border:`1px solid ${C.lineSoft}`,background:C.panel,borderRadius:10,padding:"14px 16px",fontFamily:"var(--mono)",fontSize:12.5,color:C.muted}}>{brd.reason||"语料不足，无法生成 BRD。"}</div>;
+
+      const dec=brd.decision||{};
+      const decColor=dec.verdict==="GO"?C.strong:dec.verdict==="NO-GO"?C.pay:C.signal;
+      const persona=brd.persona||{};
+      const market=brd.marketSize||{};
+      const pricing=brd.pricing||{};
+      const sugg=pricing.suggested||{};
+      const conf=Math.max(0,Math.min(100,Number(dec.confidence)||0));
+      const pl=PAIN_LEVEL[persona.painLevel]||PAIN_LEVEL.low;
+      const wtp=WTP[persona.willingnessToPay]||WTP.unknown;
+      const mk=MARKET[market.signal]||MARKET.tiny;
+
+      const SectionHead=({children})=><div style={{fontFamily:"var(--mono)",fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",color:C.faint,marginBottom:10}}>{children}</div>;
+
+      return <div className="dr-card" style={{marginTop:18,border:`1px solid ${C.line}`,background:C.panel,borderRadius:12,padding:"20px 22px"}}>
+        {/* 决策标题条 */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,paddingBottom:14,borderBottom:`1px solid ${C.lineSoft}`}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontFamily:"var(--display)",fontWeight:700,fontSize:16,color:C.text}}>BRD 深度分析</span>
+            <span style={{display:"inline-flex",alignItems:"center",gap:7,border:`1px solid ${decColor}`,color:decColor,borderRadius:6,padding:"4px 10px",fontFamily:"var(--display)",fontWeight:700,fontSize:13}}>{dec.verdict||"MIXED"}</span>
+            <span style={{fontFamily:"var(--mono)",fontSize:11.5,color:C.muted}}>置信度 <span style={{color:decColor}}>{conf}</span><span style={{color:C.faint}}>/100</span></span>
+          </div>
+          {brd.deepenFetchedCount!=null && <span style={{fontFamily:"var(--mono)",fontSize:10.5,color:C.faint}}>基于 {brd.deepenFetchedCount} 条聚焦语料</span>}
+        </div>
+
+        {/* 决策摘要：风险 / 机会 / 下一步 */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:14,marginTop:16}}>
+          {[["风险","risks",C.pay],["机会","opportunities",C.strong],["下一步","nextSteps",C.signal]].map(([label,key,col])=>{
+            const arr=dec[key]||[];
+            return <div key={key}>
+              <div style={{fontFamily:"var(--mono)",fontSize:10.5,letterSpacing:"0.1em",textTransform:"uppercase",color:col,marginBottom:7}}>{label}</div>
+              {arr.length===0 ? <div style={{fontFamily:"var(--mono)",fontSize:11.5,color:C.faint}}>–</div>
+                : <ul style={{margin:0,paddingLeft:16,fontSize:13,color:C.muted,lineHeight:1.55}}>{arr.map((s,i)=><li key={i} style={{marginBottom:4}}>{s}</li>)}</ul>}
+            </div>;
+          })}
+        </div>
+
+        {/* 用户画像 */}
+        {persona.description && <div style={{marginTop:22,paddingTop:18,borderTop:`1px solid ${C.lineSoft}`}}>
+          <SectionHead>用户画像</SectionHead>
+          <div style={{fontSize:14,color:C.text,lineHeight:1.55,marginBottom:10}}>{persona.description}</div>
+          <div style={{display:"flex",gap:18,flexWrap:"wrap",fontFamily:"var(--mono)",fontSize:11.5,color:C.faint,marginBottom:12}}>
+            <span>痛点强度 <span style={{color:pl.color}}>{pl.label}</span></span>
+            <span>付费意愿 <span style={{color:wtp.color}}>{wtp.label}</span></span>
+            {(persona.alternativesTried||[]).length>0 && <span>试过的替代品 <span style={{color:C.muted}}>{persona.alternativesTried.slice(0,4).join("、")}</span></span>}
+          </div>
+          {(persona.quotes||[]).length>0 && <div style={{display:"flex",flexDirection:"column",gap:7,paddingTop:8,borderTop:`1px dashed ${C.lineSoft}`}}>
+            {persona.quotes.map((q,i)=><div key={i} style={{display:"flex",gap:10,alignItems:"baseline"}}>
+              <span style={{fontFamily:"var(--mono)",fontSize:10.5,color:C.faint,minWidth:90}}>{q.source||"来源"}</span>
+              <span style={{fontSize:13,color:C.muted,lineHeight:1.5}}>"{q.snippet}" {q.url && <a className="dr-link" href={q.url} target="_blank" rel="noopener noreferrer">原帖 ↗</a>}</span>
+            </div>)}
+          </div>}
+        </div>}
+
+        {/* 竞品 */}
+        {(brd.competitors||[]).length>0 && <div style={{marginTop:22,paddingTop:18,borderTop:`1px solid ${C.lineSoft}`}}>
+          <SectionHead>主要竞品</SectionHead>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            {brd.competitors.map((c,i)=><div key={i} style={{border:`1px solid ${C.lineSoft}`,background:C.ink2,borderRadius:8,padding:"12px 14px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <span style={{fontFamily:"var(--display)",fontWeight:600,fontSize:14,color:C.text}}>{c.name}</span>
+                {c.url && <a className="dr-link" href={c.url} target="_blank" rel="noopener noreferrer" style={{fontSize:11}}>官网 ↗</a>}
+              </div>
+              {c.positioning && <div style={{fontSize:13,color:C.muted,marginTop:6,lineHeight:1.5}}><span style={{color:C.faint,fontFamily:"var(--mono)",fontSize:10.5,marginRight:6}}>定位</span>{c.positioning}</div>}
+              {c.weakness && <div style={{fontSize:13,color:C.muted,marginTop:4,lineHeight:1.5}}><span style={{color:C.pay,fontFamily:"var(--mono)",fontSize:10.5,marginRight:6}}>弱点</span>{c.weakness}</div>}
+              {(c.evidence||[]).length>0 && <div style={{marginTop:9,paddingTop:9,borderTop:`1px dashed ${C.lineSoft}`,display:"flex",flexDirection:"column",gap:5}}>
+                {c.evidence.map((ev,j)=><div key={j} style={{display:"flex",gap:10,alignItems:"baseline"}}>
+                  <span style={{fontFamily:"var(--mono)",fontSize:10.5,color:C.faint,minWidth:90}}>{ev.source||"来源"}</span>
+                  <span style={{fontSize:12.5,color:C.muted,lineHeight:1.5}}>{ev.snippet} {ev.url && <a className="dr-link" href={ev.url} target="_blank" rel="noopener noreferrer">原帖 ↗</a>}</span>
+                </div>)}
+              </div>}
+            </div>)}
+          </div>
+        </div>}
+
+        {/* 市场规模 + 定价 */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:18,marginTop:22,paddingTop:18,borderTop:`1px solid ${C.lineSoft}`}}>
+          {market.reasoning && <div>
+            <SectionHead>市场规模</SectionHead>
+            <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:8}}>
+              <span style={{fontFamily:"var(--display)",fontWeight:700,fontSize:18,color:mk.color}}>{mk.label}</span>
+              <span style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint}}>{market.signal}</span>
+            </div>
+            <div style={{fontSize:13,color:C.muted,lineHeight:1.55}}>{market.reasoning}</div>
+            {(market.indicators||[]).length>0 && <ul style={{margin:"8px 0 0",paddingLeft:16,fontSize:12.5,color:C.faint,lineHeight:1.55}}>{market.indicators.map((s,i)=><li key={i}>{s}</li>)}</ul>}
+          </div>}
+          {(pricing.benchmarks||[]).length>0 || sugg.range ? <div>
+            <SectionHead>定价</SectionHead>
+            {(pricing.benchmarks||[]).length>0 && <div style={{marginBottom:10,fontFamily:"var(--mono)",fontSize:11.5}}>
+              <div style={{color:C.faint,marginBottom:5}}>对标</div>
+              {pricing.benchmarks.map((b,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",gap:10,color:C.muted,padding:"3px 0"}}>
+                <span>{b.competitor} <span style={{color:C.faint}}>· {b.plan}</span></span>
+                <span style={{color:C.text}}>{b.price}</span>
+              </div>)}
+            </div>}
+            {sugg.range && <div>
+              <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,marginBottom:5}}>建议</div>
+              <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:5}}>
+                <span style={{fontFamily:"var(--display)",fontWeight:700,fontSize:16,color:sugg.range==="unknown"?C.faint:C.signal}}>{sugg.range}</span>
+                {sugg.model && <span style={{fontFamily:"var(--mono)",fontSize:11,color:C.muted}}>{sugg.model}</span>}
+              </div>
+              {sugg.reasoning && <div style={{fontSize:12.5,color:C.muted,lineHeight:1.5}}>{sugg.reasoning}</div>}
+            </div>}
+          </div> : null}
+        </div>
       </div>;
     }
 
@@ -277,6 +458,15 @@
       function deleteHistory(e,id){ e.stopPropagation(); setHistory(removeHistory(id)); }
       function clearHistory(){ setHistory(clearAllHistory()); }
 
+      // 当 BRD 生成后，把它合并进当前 result 和最近一条历史记录
+      function handleDeepen(brd){
+        setResult(prev => prev ? { ...prev, brd } : prev);
+        try{
+          const list=loadHistory();
+          if(list.length>0){ list[0]={...list[0], result:{...list[0].result, brd}}; localStorage.setItem(HISTORY_KEY,JSON.stringify(list)); setHistory(list); }
+        }catch(e){}
+      }
+
       return <div>
         <Eyebrow>调谐 · 输入方向（中 / 英均可）</Eyebrow>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
@@ -321,11 +511,11 @@
           <button className="dr-btn" onClick={()=>runScan()} style={{marginTop:14,background:C.panel,color:C.text,border:`1px solid ${C.line}`,borderRadius:7,padding:"8px 16px",fontFamily:"var(--display)",fontWeight:600,fontSize:13}}>重试</button>
         </div>}
 
-        {status==="done" && result && <Report data={result} onRescan={handleRescan}/>}
+        {status==="done" && result && <Report data={result} onRescan={handleRescan} onDeepen={handleDeepen}/>}
       </div>;
     }
 
-    function Report({data, onRescan}){
+    function Report({data, onRescan, onDeepen}){
       const strength=STRENGTH_META[data.overallStrength]||STRENGTH_META.weak;
       const score=Math.max(0,Math.min(100,Number(data.demandScore)||0));
       const decisionColor=data.decision==="GO"?C.strong:data.decision==="NO-GO"?C.pay:C.signal;
@@ -337,18 +527,43 @@
       const isEditing = editExp !== null;
       const exp = isEditing ? editExp : origExp;
 
+      const [brd,setBrd]=useState(data.brd||null);
+      const [brdStatus,setBrdStatus]=useState(data.brd?"done":"idle");
+      const [brdError,setBrdError]=useState("");
+      useEffect(()=>{ setBrd(data.brd||null); setBrdStatus(data.brd?"done":"idle"); setBrdError(""); },[data]);
+
       function startEdit(){ setEditExp(JSON.parse(JSON.stringify(origExp))); }
       function cancelEdit(){ setEditExp(null); }
       function updateField(field, newArr){ setEditExp(prev=>({...prev,[field]:newArr})); }
       function doRescan(){ if(onRescan && editExp){ onRescan(editExp); setEditExp(null); } }
 
+      async function runDeepen(){
+        if(brdStatus==="loading") return;
+        setBrdStatus("loading"); setBrdError(""); setBrd(null);
+        try{
+          const res=await fetch("/api/deepen",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({input:data.input,expansion:origExp})});
+          const r=await res.json();
+          if(r.error && !r.decision){ setBrdError(r.error); setBrdStatus("error"); return; }
+          setBrd(r); setBrdStatus("done");
+          if(onDeepen) onDeepen(r);
+        }catch(e){ setBrdError("网络错误："+e.message); setBrdStatus("error"); }
+      }
+
       return <div style={{marginTop:34}}>
         {/* 操作栏 */}
         <div style={{display:"flex",gap:10,marginBottom:18,flexWrap:"wrap"}}>
-          <button className="dr-btn" onClick={()=>downloadMarkdown(data)}
+          <button className="dr-btn" onClick={()=>downloadMarkdown({...data,brd})}
             style={{background:C.panel,color:C.text,border:`1px solid ${C.line}`,borderRadius:7,padding:"8px 16px",fontFamily:"var(--display)",fontWeight:600,fontSize:13}}>
             导出 Markdown
           </button>
+          {!brd && brdStatus!=="loading" && <button className="dr-btn" onClick={runDeepen}
+            style={{background:C.signal,color:C.ink,border:`1px solid ${C.signal}`,borderRadius:7,padding:"8px 16px",fontFamily:"var(--display)",fontWeight:600,fontSize:13}}>
+            深入分析（BRD）
+          </button>}
+          {brd && brdStatus==="done" && <button className="dr-btn" onClick={runDeepen}
+            style={{background:"transparent",color:C.muted,border:`1px solid ${C.line}`,borderRadius:7,padding:"8px 16px",fontFamily:"var(--mono)",fontSize:12}}>
+            重新生成 BRD
+          </button>}
         </div>
 
         <div className="dr-card" style={{border:`1px solid ${C.line}`,background:C.panel,borderRadius:12,padding:"22px 22px 20px"}}>
@@ -366,6 +581,19 @@
           {data.decisionReason && <div style={{marginTop:16,paddingTop:16,borderTop:`1px solid ${C.lineSoft}`,fontSize:14,color:C.muted,lineHeight:1.55}}>{data.decisionReason}</div>}
           {data.fetchedCount!=null && <div style={{marginTop:10,fontFamily:"var(--mono)",fontSize:10.5,color:C.faint}}>基于 {data.fetchedCount} 条真实抓取的讨论{data.llmUsage ? ` · LLM ${data.llmUsage.calls} 次调用` : ""}</div>}
         </div>
+
+        {/* BRD 深度分析 */}
+        {brdStatus==="loading" && <div style={{marginTop:18,border:`1px solid ${C.lineSoft}`,background:C.panel,borderRadius:10,padding:"14px 18px"}}>
+          <div className="dr-sweep" style={{position:"relative",overflow:"hidden",height:2,background:C.lineSoft,borderRadius:1,marginBottom:14}}/>
+          <div style={{display:"flex",alignItems:"center",gap:12}}><SignalBars count={6} color={C.signal} animate total={6}/><span style={{fontFamily:"var(--mono)",fontSize:13,color:C.muted}}>抓取竞品 / 定价 / 评测 + 生成 BRD…</span></div>
+          <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,marginTop:10}}>通常 15–30 秒</div>
+        </div>}
+        {brdStatus==="error" && <div style={{marginTop:18,border:`1px solid ${C.pay}55`,background:"#2a1614",borderRadius:10,padding:"14px 18px"}}>
+          <div style={{fontFamily:"var(--mono)",fontSize:12,color:C.pay,marginBottom:5}}>BRD 生成失败</div>
+          <div style={{fontSize:13.5,color:C.text}}>{brdError}</div>
+          <button className="dr-btn" onClick={runDeepen} style={{marginTop:10,background:C.panel,color:C.text,border:`1px solid ${C.line}`,borderRadius:6,padding:"6px 14px",fontFamily:"var(--mono)",fontSize:12}}>重试</button>
+        </div>}
+        {brd && brdStatus==="done" && <BRDCard brd={brd}/>}
 
         <div style={{marginTop:22}}>
           <Eyebrow>信号构成</Eyebrow>
@@ -503,7 +731,7 @@
               <SignalBars count={6} color={C.signal} total={6}/>
               <div>
                 <div style={{fontFamily:"var(--display)",fontWeight:700,fontSize:22,letterSpacing:"-0.01em"}}>需求雷达 <span style={{color:C.signal}}>/</span> DemandRadar</div>
-                <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,marginTop:2,letterSpacing:"0.04em"}}>V0.4 · 找信号，不找灵感</div>
+                <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,marginTop:2,letterSpacing:"0.04em"}}>V0.5 · 找信号，不找灵感</div>
               </div>
             </div>
             <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,maxWidth:240,textAlign:"right"}}>抓真实讨论，输出带证据的需求判断</div>
