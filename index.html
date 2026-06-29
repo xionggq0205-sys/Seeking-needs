@@ -41,6 +41,10 @@
     .dr-chip-edit:hover{ border-color:var(--signal) !important; }
     .dr-chip-x{ position:absolute; top:-6px; right:-6px; width:14px; height:14px; border-radius:50%; background:var(--pay); color:#fff; font-size:10px; line-height:14px; text-align:center; cursor:pointer; display:none; }
     .dr-chip-edit:hover .dr-chip-x{ display:block; }
+    .dr-hist{ cursor:pointer; transition:border-color .15s ease, background .15s ease; }
+    .dr-hist:hover{ border-color:var(--signal); background:var(--panel2); }
+    .dr-hist-x{ opacity:0; transition:opacity .15s ease; }
+    .dr-hist:hover .dr-hist-x{ opacity:1; }
   </style>
 </head>
 <body>
@@ -198,6 +202,34 @@
       </div>;
     }
 
+    // ── 验证历史（localStorage 本地保存）──────────────────
+    const HISTORY_KEY="dr_history_v1";
+    const HISTORY_CAP=20;
+    function loadHistory(){ try{ return JSON.parse(localStorage.getItem(HISTORY_KEY)||"[]"); }catch(e){ return []; } }
+    function saveToHistory(input,result){
+      try{
+        const list=loadHistory();
+        const entry={ id:`${Date.now()}_${Math.random().toString(36).slice(2,7)}`, input, ts:Date.now(),
+          score:result.demandScore??null, decision:result.decision||"MIXED", strength:result.overallStrength||"weak", result };
+        const next=[entry,...list].slice(0,HISTORY_CAP);
+        localStorage.setItem(HISTORY_KEY,JSON.stringify(next));
+        return next;
+      }catch(e){ return loadHistory(); }
+    }
+    function removeHistory(id){
+      const next=loadHistory().filter(h=>h.id!==id);
+      try{ localStorage.setItem(HISTORY_KEY,JSON.stringify(next)); }catch(e){}
+      return next;
+    }
+    function clearAllHistory(){ try{ localStorage.removeItem(HISTORY_KEY); }catch(e){} return []; }
+    function relTime(ts){
+      const s=Math.floor((Date.now()-ts)/1000);
+      if(s<60) return "刚刚";
+      if(s<3600) return `${Math.floor(s/60)} 分钟前`;
+      if(s<86400) return `${Math.floor(s/3600)} 小时前`;
+      return `${Math.floor(s/86400)} 天前`;
+    }
+
     // ── 验证模式 ──────────────────────────────────────────
     function Validate(){
       const [input,setInput]=useState("");
@@ -205,8 +237,10 @@
       const [result,setResult]=useState(null);
       const [error,setError]=useState("");
       const [stepIdx,setStepIdx]=useState(0);
+      const [history,setHistory]=useState([]);
       const timerRef=useRef(null);
       useEffect(()=>()=>clearInterval(timerRef.current),[]);
+      useEffect(()=>{ setHistory(loadHistory()); },[]);
 
       async function runScan(q, customExpansion){
         const query=(q??input).trim();
@@ -227,12 +261,21 @@
           if(data.error){ setError(data.error==="parse_failed"?"结果解析失败，可能被截断。请重试或把方向写得更聚焦。":data.error); setStatus("error"); return; }
           if(!data.painPoints){ setError("返回数据异常，请重试。"); setStatus("error"); return; }
           setResult(data); setStatus("done");
+          setHistory(saveToHistory(query, data));
         }catch(e){ clearInterval(timerRef.current); setError("网络错误："+e.message); setStatus("error"); }
       }
 
       function handleRescan(editedExpansion){
         runScan(input, editedExpansion);
       }
+
+      function loadFromHistory(entry){
+        clearInterval(timerRef.current);
+        setInput(entry.input); setResult(entry.result); setStatus("done"); setError("");
+        window.scrollTo({top:0,behavior:"smooth"});
+      }
+      function deleteHistory(e,id){ e.stopPropagation(); setHistory(removeHistory(id)); }
+      function clearHistory(){ setHistory(clearAllHistory()); }
 
       return <div>
         <Eyebrow>调谐 · 输入方向（中 / 英均可）</Eyebrow>
@@ -245,6 +288,26 @@
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
           {EXAMPLES.map(ex=><button key={ex} className="dr-ex dr-btn" onClick={()=>{setInput(ex);runScan(ex);}} style={{fontFamily:"var(--mono)",fontSize:12,color:C.muted,background:"transparent",border:`1px solid ${C.lineSoft}`,borderRadius:20,padding:"5px 12px"}}>{ex}</button>)}
         </div>
+
+        {history.length>0 && status!=="scanning" && <div style={{marginTop:22}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <span style={{fontFamily:"var(--mono)",fontSize:10.5,letterSpacing:"0.12em",textTransform:"uppercase",color:C.faint}}>最近验证 · 本地保存（{history.length}）</span>
+            <button className="dr-btn" onClick={clearHistory} style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,background:"transparent",border:`1px solid ${C.lineSoft}`,borderRadius:6,padding:"3px 10px"}}>清空</button>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {history.map(h=>{
+              const dc=h.decision==="GO"?C.strong:h.decision==="NO-GO"?C.pay:C.signal;
+              return <div key={h.id} className="dr-hist" onClick={()=>loadFromHistory(h)}
+                style={{display:"flex",alignItems:"center",gap:12,border:`1px solid ${C.lineSoft}`,background:C.panel,borderRadius:8,padding:"9px 12px"}}>
+                <span style={{flex:"1 1 auto",fontSize:13.5,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.input}</span>
+                <span style={{fontFamily:"var(--mono)",fontSize:12,color:C.muted,minWidth:52,textAlign:"right"}}>{h.score??"–"}<span style={{color:C.faint,fontSize:10}}>/100</span></span>
+                <span style={{fontFamily:"var(--mono)",fontSize:10.5,color:dc,border:`1px solid ${dc}66`,borderRadius:4,padding:"2px 7px",minWidth:54,textAlign:"center"}}>{h.decision}</span>
+                <span style={{fontFamily:"var(--mono)",fontSize:10.5,color:C.faint,minWidth:62,textAlign:"right"}}>{relTime(h.ts)}</span>
+                <span className="dr-hist-x" onClick={e=>deleteHistory(e,h.id)} style={{color:C.faint,fontSize:15,cursor:"pointer",padding:"0 2px",lineHeight:1}} title="删除">×</span>
+              </div>;
+            })}
+          </div>
+        </div>}
 
         {status==="scanning" && <div style={{marginTop:34}}>
           <div className="dr-sweep" style={{position:"relative",overflow:"hidden",height:3,background:C.lineSoft,borderRadius:2}}/>
@@ -440,7 +503,7 @@
               <SignalBars count={6} color={C.signal} total={6}/>
               <div>
                 <div style={{fontFamily:"var(--display)",fontWeight:700,fontSize:22,letterSpacing:"-0.01em"}}>需求雷达 <span style={{color:C.signal}}>/</span> DemandRadar</div>
-                <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,marginTop:2,letterSpacing:"0.04em"}}>V0.3 · 找信号，不找灵感</div>
+                <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,marginTop:2,letterSpacing:"0.04em"}}>V0.4 · 找信号，不找灵感</div>
               </div>
             </div>
             <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,maxWidth:240,textAlign:"right"}}>抓真实讨论，输出带证据的需求判断</div>

@@ -453,9 +453,17 @@ Google Trends、SimilarWeb、Ubersuggest、Reddit、Product Hunt、G2、Capterra
 
 1. **Google Trends 接入**（FR-8.3）：补充关键词趋势数据源
 2. **V3 BRD 深度分析**（FR-9）：竞品拆解、用户画像、TAM-SAM-SOM、定价、GO/NO-GO 完整输出
-3. **验证模式历史记录**：保存用户的历史验证结果，方便回顾
 
 ### 已解决的技术问题
 
-- **Vercel 超时**：Hobby 计划函数超时约 12s（maxDuration 配置不生效），已通过拆分 API 解决（/api/expand + /api/analyze 各在 12s 内完成）
+- **Vercel 超时**：Hobby 计划函数超时约 12s（按 CPU 时间计，I/O 等待不计入；maxDuration 配置不生效），已通过拆分 API 解决（/api/expand 扩词 + /api/analyze 抓取分析，各自独立完成）
+- **Reddit OAuth 卡死**：Reddit 令牌请求在 Vercel 上挂起导致函数返回 0 字节，已改为默认只用 HN，Reddit 需显式开启（includeReddit + 配密钥）
 - **fetch 无超时**：所有外部请求已添加 AbortController 超时保护（LLM 10s，数据源 8s）
+- **GitHub Actions 缺失**：补上 .github/workflows/weekly-scan.yml，发现模式才能定时产出快照（需配 LLM_API_KEY secret）
+
+### V0.4 新增（2026-06-29）
+
+| 功能 | 状态 | 实现 |
+|---|---|---|
+| 验证历史记录 | ✅ 已实现 | localStorage 本地保存最近 20 次验证，可点击回看、单条删除、一键清空 |
+| weekly-scan workflow | ✅ 已实现 | 每周一 cron + 手动触发，扫描后自动 commit 快照回仓库 |
