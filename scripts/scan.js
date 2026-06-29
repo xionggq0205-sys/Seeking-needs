@@ -48,6 +48,7 @@ async function main() {
     subreddits: cfg.subreddits || [],
     perQuery: cfg.perQuery || 8,
     sinceDays: cfg.sinceDays || 7,
+    includeReddit: true, // 定时扫描跑在 GitHub Actions，无 12s 限制；配了 Reddit 密钥才实际生效
   });
   console.log(`[scan] fetched ${items.length} items`);
 
