@@ -6,6 +6,7 @@
 import { buildQueries, analyzeCorpus, filterByExcluded, filterNoise } from "../lib/analyze.js";
 import { gather } from "../lib/sources.js";
 import { costTracker } from "../lib/llm.js";
+import { fetchTrends } from "../lib/googleTrends.js";
 
 function withTimeout(promise, ms) {
   return Promise.race([
@@ -37,11 +38,14 @@ export default async function handler(req, res) {
     items = filterNoise(items);
     items = items.slice(0, 20);
 
+    // 并行：LLM 分析 + Google Trends（非官方端点，失败降级为不可用）。
+    const trendsPromise = fetchTrends(expansion.englishSearchQuery || input, { months: 12, timeoutMs: 8000 });
     const report = await analyzeCorpus(input, items, { maxPains: 3, maxTokens: 3500 });
     if (report.error) return res.status(200).json(report);
     report.expansion = expansion;
     report.fetchedCount = items.length;
     report.llmUsage = costTracker.summary();
+    report.trends = await trendsPromise;
     return res.status(200).json(report);
   }
 

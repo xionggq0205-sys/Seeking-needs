@@ -451,9 +451,8 @@ Google Trends、SimilarWeb、Ubersuggest、Reddit、Product Hunt、G2、Capterra
 
 ### 待开发项（按优先级）
 
-1. **Google Trends 接入**（FR-8.3）：补充关键词趋势数据源
-2. **BRD 深度分析多轮迭代**：基于现有 BRD 让用户追问竞品细节、定价细节
-3. **快照对比视图**：发现模式两周快照 diff（哪些痛点是新的、哪些变热）
+1. **快照对比视图**：发现模式两周快照 diff（哪些痛点是新的、哪些变热）
+2. **多语言市场切换**：Trends 支持指定 geo（目前默认 worldwide）
 
 ### 已解决的技术问题
 
@@ -483,3 +482,4 @@ Google Trends、SimilarWeb、Ubersuggest、Reddit、Product Hunt、G2、Capterra
 |  | BRD Markdown 导出 | ✅ | 已合并到「导出 Markdown」按钮，BRD 已生成时一并输出 |
 |  | BRD 历史持久化 | ✅ | BRD 自动合并进当前 result 与 localStorage 最近一条历史 |
 |  | BRD 多轮追问 | ✅ | POST /api/brd-ask + lib/brdAsk.js：基于 BRD 上下文 + 针对问题抓取的新语料，单次 LLM 调用产出可引用回答；UI 含 4 个快捷问题、Ctrl/⌘+Enter 发送；追问线程持久化进历史与 Markdown |
+| FR-8.3 | Google Trends 接入 | ✅ 已实现 | lib/googleTrends.js（非官方 explore + widgetdata/multiline 端点 + cookie 提取 + 8s 超时）；与 /api/analyze 内 LLM 分析并行执行，无附加延迟；前端 TrendCard：12 个月稀疏折线 SVG + 上升/平稳/下行 + 前后段均值对比 + 增长百分比；失败优雅降级显示 reason；含进 Markdown 导出 |

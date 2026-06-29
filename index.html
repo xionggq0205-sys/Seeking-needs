@@ -82,6 +82,20 @@
       md += `- **决策理由**：${data.decisionReason||"–"}\n`;
       md += `- **抓取讨论数**：${data.fetchedCount??"–"}\n\n`;
 
+      const tr=data.trends;
+      if(tr){
+        md += `## Google Trends（12 个月）\n\n`;
+        if(tr.available){
+          const s=tr.summary||{};
+          md += `- **关键词**：${tr.keyword}（${tr.geo||"worldwide"}）\n`;
+          md += `- **趋势**：${(TREND_DIR[s.trend]||{}).label||s.trend||"–"}（${s.growthPct>=0?"+":""}${s.growthPct}%）\n`;
+          md += `- **均值**：${s.avg}（前段 ${s.earlyAvg} → 后段 ${s.lateAvg}）\n`;
+          md += `- **最新**：${s.latest}\n\n`;
+        } else {
+          md += `数据不可用：${tr.reason||"unknown"}\n\n`;
+        }
+      }
+
       md += `## 信号构成\n\n`;
       md += `| 类型 | 数量 |\n|---|---|\n`;
       Object.keys(SIGNAL_META).forEach(k=>{
@@ -241,6 +255,66 @@
           : <button onClick={()=>setAdding(true)}
               style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,background:"transparent",border:`1px dashed ${C.lineSoft}`,borderRadius:4,padding:"3px 8px",cursor:"pointer"}}>+ 添加</button>
         }
+      </div>;
+    }
+
+    // ── Google Trends 趋势卡 ───────────────────────────
+    const TREND_DIR = {
+      up:    { label:"上升", color:"#7fd28a" },
+      down:  { label:"下行", color:"#f08570" },
+      steady:{ label:"平稳", color:"#e0a447" },
+    };
+
+    function TrendSparkline({points, color, width=320, height=56}){
+      if(!points || points.length<2) return null;
+      const pad=4;
+      const vals=points.map(p=>p.value);
+      const mn=Math.min(...vals), mx=Math.max(...vals);
+      const span=Math.max(1,mx-mn);
+      const x=i=>pad+(i/(points.length-1))*(width-pad*2);
+      const y=v=>pad+(1-(v-mn)/span)*(height-pad*2);
+      const d=points.map((p,i)=>(i===0?"M":"L")+x(i).toFixed(1)+","+y(p.value).toFixed(1)).join(" ");
+      // Area fill underneath
+      const area=d+` L ${(width-pad).toFixed(1)},${(height-pad).toFixed(1)} L ${pad},${(height-pad).toFixed(1)} Z`;
+      return <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{display:"block"}}>
+        <path d={area} fill={color} fillOpacity="0.13"/>
+        <path d={d} fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>;
+    }
+
+    function TrendCard({trends}){
+      if(!trends) return null;
+      if(!trends.available){
+        return <div style={{marginTop:18,border:`1px solid ${C.lineSoft}`,background:C.panel,borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontFamily:"var(--mono)",fontSize:10.5,letterSpacing:"0.1em",textTransform:"uppercase",color:C.faint}}>趋势</span>
+          <span style={{fontFamily:"var(--mono)",fontSize:11.5,color:C.faint}}>Google Trends 数据不可用（{trends.reason||"unknown"}）</span>
+        </div>;
+      }
+      const s=trends.summary||{};
+      const td=TREND_DIR[s.trend]||TREND_DIR.steady;
+      const growthStr=(s.growthPct>=0?"+":"")+s.growthPct+"%";
+      return <div className="dr-card" style={{marginTop:18,border:`1px solid ${C.line}`,background:C.panel,borderRadius:12,padding:"16px 20px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:14,flexWrap:"wrap",marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:12,flexWrap:"wrap"}}>
+            <span style={{fontFamily:"var(--mono)",fontSize:10.5,letterSpacing:"0.12em",textTransform:"uppercase",color:C.faint}}>Google Trends · 12 个月</span>
+            <span style={{fontFamily:"var(--display)",fontSize:13,color:C.muted}}>{trends.keyword}</span>
+          </div>
+          <div style={{display:"flex",alignItems:"baseline",gap:14}}>
+            <span style={{fontFamily:"var(--display)",fontWeight:700,fontSize:16,color:td.color}}>{td.label}</span>
+            <span style={{fontFamily:"var(--mono)",fontSize:12,color:td.color}}>{growthStr}</span>
+            <span style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint}}>均值 {s.avg}</span>
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+          <div style={{flex:"1 1 auto",minWidth:240,overflow:"hidden"}}>
+            <TrendSparkline points={trends.points} color={td.color}/>
+          </div>
+          <div style={{fontFamily:"var(--mono)",fontSize:10.5,color:C.faint,lineHeight:1.6,minWidth:140}}>
+            <div>前 {Math.max(1,Math.floor((trends.points||[]).length/3))} 周均值 <span style={{color:C.muted}}>{s.earlyAvg}</span></div>
+            <div>近 {Math.max(1,Math.floor((trends.points||[]).length/3))} 周均值 <span style={{color:C.muted}}>{s.lateAvg}</span></div>
+            <div>近期值 <span style={{color:C.muted}}>{s.latest}</span></div>
+          </div>
+        </div>
       </div>;
     }
 
@@ -683,6 +757,9 @@
           {data.decisionReason && <div style={{marginTop:16,paddingTop:16,borderTop:`1px solid ${C.lineSoft}`,fontSize:14,color:C.muted,lineHeight:1.55}}>{data.decisionReason}</div>}
           {data.fetchedCount!=null && <div style={{marginTop:10,fontFamily:"var(--mono)",fontSize:10.5,color:C.faint}}>基于 {data.fetchedCount} 条真实抓取的讨论{data.llmUsage ? ` · LLM ${data.llmUsage.calls} 次调用` : ""}</div>}
         </div>
+
+        {/* Google Trends 趋势 */}
+        {data.trends && <TrendCard trends={data.trends}/>}
 
         {/* BRD 深度分析 */}
         {brdStatus==="loading" && <div style={{marginTop:18,border:`1px solid ${C.lineSoft}`,background:C.panel,borderRadius:10,padding:"14px 18px"}}>
