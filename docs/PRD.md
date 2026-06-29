@@ -451,8 +451,8 @@ Google Trends、SimilarWeb、Ubersuggest、Reddit、Product Hunt、G2、Capterra
 
 ### 待开发项（按优先级）
 
-1. **快照对比视图**：发现模式两周快照 diff（哪些痛点是新的、哪些变热）
-2. **多语言市场切换**：Trends 支持指定 geo（目前默认 worldwide）
+1. **多语言市场切换**：Trends 支持指定 geo（目前默认 worldwide）
+2. **Discover 模式自动刷新**：weekly-scan workflow 跑完后自动 invalidate 前端缓存
 
 ### 已解决的技术问题
 
@@ -483,3 +483,9 @@ Google Trends、SimilarWeb、Ubersuggest、Reddit、Product Hunt、G2、Capterra
 |  | BRD 历史持久化 | ✅ | BRD 自动合并进当前 result 与 localStorage 最近一条历史 |
 |  | BRD 多轮追问 | ✅ | POST /api/brd-ask + lib/brdAsk.js：基于 BRD 上下文 + 针对问题抓取的新语料，单次 LLM 调用产出可引用回答；UI 含 4 个快捷问题、Ctrl/⌘+Enter 发送；追问线程持久化进历史与 Markdown |
 | FR-8.3 | Google Trends 接入 | ✅ 已实现 | lib/googleTrends.js（非官方 explore + widgetdata/multiline 端点 + cookie 提取 + 8s 超时）；与 /api/analyze 内 LLM 分析并行执行，无附加延迟；前端 TrendCard：12 个月稀疏折线 SVG + 上升/平稳/下行 + 前后段均值对比 + 增长百分比；失败优雅降级显示 reason；含进 Markdown 导出 |
+
+### V0.6 新增（2026-06-29）
+
+| FR | 功能 | 状态 | 实现 |
+|---|---|---|---|
+| FR-11 | 快照对比视图 | ✅ 已实现 | 新增 diffSnapshots() in lib/trends.js（已有 similarity 基础设施延伸）；GET /api/snapshot-diff?from&to 从 data/snapshots/ 加载两份快照按相似度比对；Discover tab 加「⇄ 对比模式」切换 + 两个日期 select；diff 按 new/heating/cooling/steady/gone 分桶展示，新增 gone 视觉标记（○）；空对比、错误、加载状态全覆盖 |

@@ -55,8 +55,8 @@
       text:"#E8EEF4", muted:"#90A1B2", faint:"#5C6E7F", signal:"#F4A52E", strong:"#46C08C", pay:"#E5604D", alt:"#7FB2E8" };
     const SIGNAL_META = { keyword:{label:"关键词",color:C.muted}, complaint:{label:"抱怨",color:C.signal}, alternative:{label:"替代品",color:C.alt}, payment:{label:"付费",color:C.pay} };
     const STRENGTH_META = { weak:{label:"弱",bars:2,color:C.faint}, medium:{label:"中",bars:4,color:C.signal}, strong:{label:"强",bars:6,color:C.strong} };
-    const TREND_META = { new:{label:"新",mark:"●",color:C.strong}, heating:{label:"变热",mark:"▲",color:C.pay}, cooling:{label:"变冷",mark:"▼",color:C.faint}, steady:{label:"平稳",mark:"—",color:C.muted} };
-    const TREND_ORDER = { new:0, heating:1, steady:2, cooling:3 };
+    const TREND_META = { new:{label:"新",mark:"●",color:C.strong}, heating:{label:"变热",mark:"▲",color:C.pay}, cooling:{label:"变冷",mark:"▼",color:C.faint}, steady:{label:"平稳",mark:"—",color:C.muted}, gone:{label:"已消失",mark:"○",color:C.faint} };
+    const TREND_ORDER = { new:0, heating:1, steady:2, cooling:3, gone:4 };
     const EXAMPLES = ["epub 转换工具","AI 配音","background removal","发票生成器","表格数据清洗"];
     const SCAN_STEPS = ["扩展英文搜索词…","联网抓取 Hacker News / Reddit…","清洗去噪、跨源去重…","按痛点聚类…","分类信号、计算需求分数…"];
 
@@ -831,6 +831,11 @@
       const [snap,setSnap]=useState(undefined);
       const [snapList,setSnapList]=useState([]);
       const [selectedDate,setSelectedDate]=useState("latest");
+      const [compare,setCompare]=useState(false);
+      const [fromDate,setFromDate]=useState("");
+      const [diff,setDiff]=useState(null);
+      const [diffStatus,setDiffStatus]=useState("idle");
+      const [diffError,setDiffError]=useState("");
 
       useEffect(()=>{
         fetch("./data/latest.json",{cache:"no-store"})
@@ -839,24 +844,35 @@
           .catch(()=>setSnap(null));
         fetch("/api/snapshots")
           .then(r=>r.ok?r.json():null)
-          .then(d=>{ if(d && d.snapshots) setSnapList(d.snapshots); })
+          .then(d=>{ if(d && d.snapshots){ setSnapList(d.snapshots); if(d.snapshots.length>=2 && !fromDate) setFromDate(d.snapshots[1].date); } })
           .catch(()=>{});
       },[]);
 
       function loadSnapshot(date){
         setSelectedDate(date);
         if(date==="latest"){
-          fetch("./data/latest.json",{cache:"no-store"})
-            .then(r=>r.ok?r.json():null)
-            .then(d=>setSnap(d||null))
-            .catch(()=>setSnap(null));
+          fetch("./data/latest.json",{cache:"no-store"}).then(r=>r.ok?r.json():null).then(d=>setSnap(d||null)).catch(()=>setSnap(null));
         } else {
-          fetch(`./data/snapshots/${date}.json`,{cache:"no-store"})
-            .then(r=>r.ok?r.json():null)
-            .then(d=>setSnap(d||null))
-            .catch(()=>setSnap(null));
+          fetch(`./data/snapshots/${date}.json`,{cache:"no-store"}).then(r=>r.ok?r.json():null).then(d=>setSnap(d||null)).catch(()=>setSnap(null));
         }
       }
+
+      function runDiff(from, to){
+        if(!from || !to){ setDiff(null); return; }
+        setDiffStatus("loading"); setDiffError("");
+        fetch(`/api/snapshot-diff?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
+          .then(r=>r.json())
+          .then(d=>{ if(d.error){ setDiffError(d.error); setDiffStatus("error"); } else { setDiff(d); setDiffStatus("done"); } })
+          .catch(e=>{ setDiffError("网络错误："+e.message); setDiffStatus("error"); });
+      }
+
+      function toggleCompare(){
+        const next=!compare;
+        setCompare(next);
+        if(next && fromDate) runDiff(fromDate, selectedDate);
+      }
+
+      function onFromChange(d){ setFromDate(d); if(compare) runDiff(d, selectedDate); }
 
       if(snap===undefined) return <div style={{marginTop:30,fontFamily:"var(--mono)",fontSize:13,color:C.muted}}>读取最新快照…</div>;
 
@@ -870,17 +886,82 @@
         </div>
       </div>;
 
+      const canCompare = snapList.length>=1;  // 至少一份快照，配合 latest 可对比
+      const dateStr=new Date(snap.generatedAt).toLocaleString();
+
+      // 对比模式：渲染分桶视图
+      if(compare){
+        const buckets = { new:[], heating:[], cooling:[], steady:[], gone:[] };
+        if(diff){ diff.painPoints.forEach(p=>{ (buckets[p.trend]||buckets.steady).push(p); }); }
+        const bucketMeta = [
+          ["new", "新出现"], ["heating", "正在变热"], ["cooling", "正在降温"], ["steady", "稳定存在"], ["gone", "已消失"]
+        ];
+        return <div style={{marginTop:30}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,marginBottom:16}}>
+            <Eyebrow>对比模式 · 痛点演化</Eyebrow>
+            <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+              <button className="dr-btn" onClick={toggleCompare}
+                style={{background:"transparent",color:C.muted,border:`1px solid ${C.line}`,borderRadius:6,padding:"5px 12px",fontFamily:"var(--mono)",fontSize:11.5}}>
+                退出对比
+              </button>
+            </div>
+          </div>
+
+          {/* 区间选择 */}
+          <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",border:`1px solid ${C.lineSoft}`,background:C.panel,borderRadius:8,padding:"10px 14px",marginBottom:18}}>
+            <span style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint}}>从</span>
+            <select value={fromDate} onChange={e=>onFromChange(e.target.value)}
+              style={{fontFamily:"var(--mono)",fontSize:12,color:C.text,background:C.ink2,border:`1px solid ${C.line}`,borderRadius:6,padding:"5px 9px",cursor:"pointer"}}>
+              <option value="">选择起点快照</option>
+              {snapList.map(s=><option key={s.date} value={s.date}>{s.date}（{s.painCount}）</option>)}
+            </select>
+            <span style={{fontFamily:"var(--mono)",fontSize:14,color:C.faint}}>→</span>
+            <span style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint}}>至</span>
+            <select value={selectedDate} onChange={e=>{ setSelectedDate(e.target.value); if(fromDate) runDiff(fromDate, e.target.value); }}
+              style={{fontFamily:"var(--mono)",fontSize:12,color:C.text,background:C.ink2,border:`1px solid ${C.line}`,borderRadius:6,padding:"5px 9px",cursor:"pointer"}}>
+              <option value="latest">最新</option>
+              {snapList.map(s=><option key={s.date} value={s.date}>{s.date}</option>)}
+            </select>
+          </div>
+
+          {diffStatus==="loading" && <div style={{fontFamily:"var(--mono)",fontSize:13,color:C.muted}}>对比中…</div>}
+          {diffStatus==="error" && <div style={{fontFamily:"var(--mono)",fontSize:13,color:C.pay}}>{diffError}</div>}
+          {diffStatus==="done" && diff && <div style={{display:"flex",flexDirection:"column",gap:24}}>
+            {bucketMeta.map(([key,label])=>{
+              const arr=buckets[key]||[];
+              const m=TREND_META[key]||TREND_META.steady;
+              if(arr.length===0) return null;
+              return <div key={key}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                  <span style={{color:m.color,fontFamily:"var(--mono)",fontSize:13}}>{m.mark}</span>
+                  <span style={{fontFamily:"var(--display)",fontWeight:600,fontSize:14,color:C.text}}>{label}</span>
+                  <span style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint}}>{arr.length}</span>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>{arr.map((p,i)=><PainCard key={`${key}-${i}`} p={p} i={i} showTrend={true}/>)}</div>
+              </div>;
+            })}
+            {Object.values(buckets).every(b=>b.length===0) && <div style={{fontFamily:"var(--mono)",fontSize:13,color:C.faint}}>两份快照之间没有可对比的痛点。</div>}
+          </div>}
+
+          <div style={{marginTop:30,paddingTop:16,borderTop:`1px solid ${C.lineSoft}`,fontFamily:"var(--mono)",fontSize:10.5,color:C.faint,lineHeight:1.6}}>对比基于标题词级 Jaccard 相似度。强度变化或来源数变化触发 heating/cooling，两边都没匹配的标记为 new/gone。</div>
+        </div>;
+      }
+
+      // 单快照视图（原逻辑）
       const pains=[...(snap.painPoints||[])].sort((a,b)=>{
         const t=(TREND_ORDER[a.trend]??9)-(TREND_ORDER[b.trend]??9); if(t) return t;
         const s=(STRENGTH_META[b.strength]?.bars||0)-(STRENGTH_META[a.strength]?.bars||0); if(s) return s;
         return (b.frequency||0)-(a.frequency||0);
       });
-      const dateStr=new Date(snap.generatedAt).toLocaleString();
 
       return <div style={{marginTop:30}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,marginBottom:16}}>
           <Eyebrow>{selectedDate==="latest"?"最新":"历史"} · {snap.theme}</Eyebrow>
-          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+            {canCompare && <button className="dr-btn" onClick={toggleCompare}
+              style={{background:"transparent",color:C.muted,border:`1px solid ${C.line}`,borderRadius:6,padding:"5px 12px",fontFamily:"var(--mono)",fontSize:11.5}}>
+              ⇄ 对比模式
+            </button>}
             {snapList.length>0 && <select value={selectedDate} onChange={e=>loadSnapshot(e.target.value)}
               style={{fontFamily:"var(--mono)",fontSize:12,color:C.text,background:C.ink2,border:`1px solid ${C.line}`,borderRadius:6,padding:"6px 10px",cursor:"pointer"}}>
               <option value="latest">最新快照</option>
@@ -890,7 +971,7 @@
           </div>
         </div>
         <div style={{display:"flex",gap:14,flexWrap:"wrap",marginBottom:18}}>
-          {Object.keys(TREND_META).map(k=><span key={k} style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"var(--mono)",fontSize:11,color:C.faint}}><span style={{color:TREND_META[k].color}}>{TREND_META[k].mark}</span>{TREND_META[k].label}</span>)}
+          {Object.keys(TREND_META).filter(k=>k!=="gone").map(k=><span key={k} style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"var(--mono)",fontSize:11,color:C.faint}}><span style={{color:TREND_META[k].color}}>{TREND_META[k].mark}</span>{TREND_META[k].label}</span>)}
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:14}}>{pains.map((p,i)=><PainCard key={i} p={p} i={i} showTrend={true}/>)}</div>
         {(snap.nextSearches||[]).length>0 && <div style={{marginTop:28}}>
@@ -910,7 +991,7 @@
               <SignalBars count={6} color={C.signal} total={6}/>
               <div>
                 <div style={{fontFamily:"var(--display)",fontWeight:700,fontSize:22,letterSpacing:"-0.01em"}}>需求雷达 <span style={{color:C.signal}}>/</span> DemandRadar</div>
-                <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,marginTop:2,letterSpacing:"0.04em"}}>V0.5 · 找信号，不找灵感</div>
+                <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,marginTop:2,letterSpacing:"0.04em"}}>V0.6 · 找信号，不找灵感</div>
               </div>
             </div>
             <div style={{fontFamily:"var(--mono)",fontSize:11,color:C.faint,maxWidth:240,textAlign:"right"}}>抓真实讨论，输出带证据的需求判断</div>
